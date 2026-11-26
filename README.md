@@ -1,5 +1,6 @@
 # Inventaris Umum & IT
 
+<<<<<<< HEAD
 Aplikasi pengelolaan aset dan barang habis pakai PT Petrokopindo Cipta Selaras untuk regu **IT**, **Sarana dan Prasarana**, **Kesekretariatan**, dan **Keamanan** (struktur: Divisi > Bidang > Regu > Karyawan, mengikuti HaloDek). Aplikasi ini berdiri sendiri, terpisah dari **HaloDek** (aplikasi tiket aduan). Keduanya bertukar data lewat API. Dibangun dengan Laravel 10 (PHP + Blade), tanpa npm / Node / CDN.
 
 ## Fitur
@@ -92,12 +93,17 @@ Orang yang nonaktif atau dihapus di HaloDek ikut dinonaktifkan di sini (kecuali 
 
 1. Salin folder proyek ke `C:/laragon/www/inventaris`, lalu buka Terminal Laragon:
    ```bash
+=======
+## Instalasi di Windows
+
+1.    ```bash
+>>>>>>> 915503aeb7094a3ac6a9cdaf6fec4c0b84a18f97
    cd C:/laragon/www/inventaris
    composer install
    cp .env.example .env
    php artisan key:generate
    ```
-2. Buat database kosong `inventaris` (HeidiSQL / phpMyAdmin).
+2. Buat database kosong `inventaris`.
 3. Buat token rahasia yang sama untuk kedua aplikasi:
    ```bash
    php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
@@ -145,27 +151,6 @@ Semua rute memakai header `Authorization: Bearer <INVENTARIS_API_TOKEN>`. Server
 | GET | `/api/v1/assets?unit=it&holder_nik=..&location_id=..&include_id=..` | Aset aktif yang boleh dilaporkan |
 | GET | `/api/v1/assets/{id}` | Detail satu aset, termasuk `check_url` (halaman cek aset publik) |
 | POST | `/api/v1/report-events` | HaloDek mengabarkan laporan kendala (idempoten per `report_id`) |
-
-## Bila muncul error 500 atau halaman lambat
-
-1. Lihat penyebabnya di log (Terminal Laragon):
-   ```bash
-   grep "\.ERROR" storage/logs/laravel.log | tail -n 3 | cut -c1-400
-   ```
-2. `SQLSTATE[HY000] [2002] ... actively refused` berarti MySQL mati. Klik **Start All** di Laragon (atau start MySQL saja).
-3. Foto gagal diunggah: batas PHP Laragon bawaan 2 MB per berkas dan 8 MB per kiriman. Form sudah mengecilkan foto otomatis; bila perlu, naikkan `upload_max_filesize` dan `post_max_size` di *Menu Laragon › PHP › php.ini*, lalu restart Apache.
-4. Setelah mengubah `.env`, jalankan `php artisan optimize:clear`.
-
-## Catatan keamanan
-
-- Jangan commit `.env`. Ganti token bila pernah terlihat orang lain.
-- Untuk server sungguhan: `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, web root ke folder `public`, dan jangan jalankan `DemoSeeder`.
-
-## Pengujian
-
-```bash
-php vendor/bin/phpunit
-```
 
 ## Data contoh (uji coba)
 
