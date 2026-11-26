@@ -1,0 +1,53 @@
+@extends('layouts.app')
+@section('title', 'Profil & Password')
+@section('subtitle', 'Data diri Anda dan penggantian password')
+
+@section('content')
+    @if ($user->must_change_password && ! $user->isKaryawan())
+        <div class="alert alert-warning"><x-icon name="lock" :size="18" /><div><strong>Ganti password bawaan Anda.</strong> Anda baru dapat memakai aplikasi setelah membuat password baru.</div></div>
+    @endif
+
+    <div class="grid {{ $user->isKaryawan() ? '' : 'cols-2' }}" style="align-items:start;{{ $user->isKaryawan() ? 'max-width:720px' : '' }}">
+        <div class="card">
+            <div class="card-head"><h2>Data Diri</h2></div>
+            <form method="POST" action="{{ route('profile.update') }}" class="card-body" style="display:grid;gap:16px">
+                @csrf @method('PUT')
+                <div class="flex items-center gap-4">
+                    <div class="avatar" style="width:56px;height:56px;font-size:18px">{{ $user->initials() }}</div>
+                    <div><div class="strong text-lg">{{ $user->name }}</div><div class="text-sm muted">{{ $user->roleLabel() }}</div></div>
+                </div>
+                @php $central = app(\App\Services\EmployeeSync::class)->enabled(); @endphp
+                {{-- Data diri ditampilkan sebagai keterangan, bukan kolom isian yang tidak bisa diubah. --}}
+                <dl class="facts">
+                    <div><dt>NIK</dt><dd class="mono">{{ $user->nik }}</dd></div>
+                    <div><dt>Divisi</dt><dd>{{ $user->division ?: '-' }}</dd></div>
+                    <div><dt>Bidang</dt><dd>{{ $user->department ?: '-' }}</dd></div>
+                    <div><dt>Jabatan</dt><dd>{{ $user->position ?: '-' }}</dd></div>
+                    @if ($central)<div><dt>No. WhatsApp</dt><dd>{{ $user->phone ?: '-' }}</dd></div>@endif
+                    @if ($user->isAdmin())
+                        <div><dt>Unit yang Anda kelola</dt><dd>@if ($user->unit)<x-unit-chip :unit="$user->unit" />@else{{ $user->isSuperadmin() || $user->isManajer() ? 'Semua unit' : '-' }}@endif</dd></div>
+                    @endif
+                </dl>
+                @if ($central)
+                    <p class="hint" style="margin:0">Data diri diambil dari HaloDek. Untuk mengubah No. WhatsApp, buka Profil di HaloDek; data lain diubah Superadmin HaloDek.</p>
+                @else
+                    <x-input name="phone" type="tel" inputmode="tel" label="No. WhatsApp" :value="$user->phone" placeholder="0812 3456 7890" maxlength="30" autocomplete="tel" />
+                    <div><button class="btn btn-primary"><x-icon name="save" :size="16" /> Simpan Profil</button></div>
+                @endif
+            </form>
+        </div>
+
+        @if (! $user->isKaryawan())
+        <div class="card">
+            <div class="card-head"><h2>Ganti Password</h2></div>
+            <form method="POST" action="{{ route('profile.password') }}" class="card-body" style="display:grid;gap:16px">
+                @csrf @method('PUT')
+                <x-input name="current_password" type="password" label="Password saat ini" required autocomplete="current-password" />
+                <x-input name="password" type="password" label="Password baru" required autocomplete="new-password" hint="Minimal 6 karakter, bebas huruf, angka, atau simbol." />
+                <x-input name="password_confirmation" type="password" label="Ulangi password baru" required autocomplete="new-password" />
+                <div><button class="btn btn-primary"><x-icon name="lock" :size="16" /> Perbarui Password</button></div>
+            </form>
+        </div>
+        @endif
+    </div>
+@endsection

@@ -1,0 +1,10 @@
+Inventaris v4: modul "Permintaan" dan dasbor karyawan dihapus (karyawan tidak lagi punya akun).
+Jika Anda menimpa folder lama dengan isi zip ini, HAPUS file/folder berikut:
+
+app/Http/Controllers/StockRequestController.php
+app/Models/ConsumableRequest.php
+resources/views/requests/            (seluruh folder)
+resources/views/dashboard/employee.blade.php
+
+Lalu jalankan: composer dump-autoload && php artisan view:clear && php artisan route:clear
+(Tidak ada migrasi baru. Tabel consumable_requests lama dibiarkan, tidak dipakai lagi.)
