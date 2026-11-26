@@ -1,15 +1,14 @@
 # Inventaris Umum & IT
 
-## Instalasi di Windows (Laragon, sebagai situs kedua)
+## Instalasi di Windows
 
-1. Salin folder proyek ke `C:/laragon/www/inventaris`, lalu buka Terminal Laragon:
-   ```bash
+1.    ```bash
    cd C:/laragon/www/inventaris
    composer install
    cp .env.example .env
    php artisan key:generate
    ```
-2. Buat database kosong `inventaris` (HeidiSQL / phpMyAdmin).
+2. Buat database kosong `inventaris`.
 3. Buat token rahasia yang sama untuk kedua aplikasi:
    ```bash
    php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
