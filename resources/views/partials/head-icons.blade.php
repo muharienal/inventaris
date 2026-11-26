@@ -4,3 +4,8 @@
 <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
 <meta name="theme-color" content="#0B5E4E">
 <meta name="apple-mobile-web-app-title" content="Inventaris">
+<link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="halodek-sw" content="{{ asset('sw.js') }}">

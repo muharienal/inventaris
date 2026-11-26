@@ -48,7 +48,6 @@ Route::middleware(['auth', 'account', 'throttle:writes'])->group(function () {
         Route::get('/stok/{consumable}', [ConsumableController::class, 'show'])->name('consumables.show');
 
         Route::get('/kategori', [CategoryController::class, 'index'])->name('categories.index');
-        Route::get('/pegawai/cari', \App\Http\Controllers\PeopleController::class)->middleware('throttle:120,1')->name('people.search');
         Route::get('/lokasi', [LocationController::class, 'index'])->name('locations.index');
     });
 

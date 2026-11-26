@@ -217,6 +217,63 @@
         $$('input[data-phone]', e.target).forEach(function (i) { i.value = phone62(i.value); });
     }, true);
 
+    /* ---------- Pasang sebagai aplikasi (PWA) ----------
+     * - Tombol "Pasang Aplikasi" di header selalu ada (kecuali sedang dibuka sebagai aplikasi).
+     * - Jendela ajakan muncul sekali tiap login selama aplikasi belum dipasang di perangkat ini.
+     * - Browser yang mendukung (HTTPS): pasang langsung. Selain itu: langkah manual sesuai perangkat. */
+    (function () {
+        var KEY = 'pwa-installed';
+        var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+        var store = { get: function () { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } },
+            set: function () { try { localStorage.setItem(KEY, '1'); } catch (e) { /* mode privat */ } } };
+        if (standalone) { store.set(); document.documentElement.classList.add('is-standalone'); }
+        var deferred = null;
+        var ua = navigator.userAgent || '';
+        var os = /android/i.test(ua) ? 'android' : (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) ? 'ios' : 'desktop');
+
+        function refresh() {
+            $$('[data-pwa-install]').forEach(function (b) { b.hidden = !deferred; });
+            $$('[data-pwa-done]').forEach(function (b) { b.hidden = !!deferred; });
+            $$('[data-pwa-native]').forEach(function (el) { el.hidden = !deferred; });
+            $$('[data-pwa-manual]').forEach(function (el) { el.hidden = !!deferred; });
+            $$('[data-pwa-os]').forEach(function (el) { el.hidden = el.getAttribute('data-pwa-os') !== os; });
+            $$('[data-pwa-inline]').forEach(function (el) { el.hidden = standalone || store.get(); });
+            // Sekali klik hanya diizinkan browser lewat HTTPS; beri tahu alasannya bila alamat masih http.
+            $$('[data-pwa-insecure]').forEach(function (el) { el.hidden = !!deferred || window.isSecureContext; });
+        }
+        function install(fromModal) {
+            if (!deferred) {
+                // Tidak bisa sekali klik: tampilkan langkahnya sendirian (tutup jendela lain agar tidak bertumpuk).
+                var m = document.getElementById('pwa-modal');
+                if (m && !fromModal) { $$('.modal.open').forEach(function (o) { if (o !== m) { closeModal(o); } }); openModal(m); }
+                return;
+            }
+            var p = deferred; deferred = null;
+            p.prompt();
+            (p.userChoice || Promise.resolve({})).then(function (c) {
+                if (c && c.outcome === 'accepted') { done(); } else { refresh(); }
+            });
+        }
+        function done() {
+            store.set(); refresh();
+            var m = document.getElementById('pwa-modal'); if (m) { closeModal(m); }
+        }
+        window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; refresh(); });
+        window.addEventListener('appinstalled', function () { deferred = null; done(); if (HU.toast) { HU.toast('Aplikasi terpasang dan siap dibuka dari layar utama atau desktop.', 'success'); } });
+        document.addEventListener('click', function (e) {
+            var ib = e.target.closest('[data-pwa-install], [data-pwa-install-or-open]');
+            if (ib) { e.preventDefault(); install(!!ib.closest('#pwa-modal')); return; }
+            if (e.target.closest('[data-pwa-done]')) { e.preventDefault(); done(); }
+        });
+        refresh();
+        document.addEventListener('DOMContentLoaded', refresh);
+        // Ajakan otomatis setelah login (server menandai data-pwa-auto), hanya bila belum terpasang.
+        var auto = document.querySelector('#pwa-modal[data-pwa-auto]');
+        if (auto && !standalone && !store.get()) {
+            setTimeout(function () { if (!document.querySelector('.modal.open')) { refresh(); openModal(auto); } }, 600);
+        }
+    })();
+
     /* ---------- PWA: service worker (hanya HTTPS atau localhost) ---------- */
     (function () {
         var meta = document.querySelector('meta[name="halodek-sw"]');
@@ -589,28 +646,29 @@
         });
     });
 
-    /* ---------- saran NIK / nama pegawai: dicari ke server saat mengetik (tidak memuat ribuan nama) ---------- */
-    (function () {
-        var timer = null, seq = 0;
-        document.addEventListener('input', function (e) {
-            var input = e.target;
-            if (!input.matches || !input.matches('input[list]')) { return; }
-            var list = document.getElementById(input.getAttribute('list'));
-            if (!list || !list.hasAttribute('data-people-src')) { return; }
-            var q = input.value.trim();
-            clearTimeout(timer);
-            if (q.length < 2) { return; }
-            timer = setTimeout(function () {
-                var my = ++seq, url = list.getAttribute('data-people-src');
-                fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
-                    .then(function (r) { return r.ok ? r.json() : []; })
-                    .then(function (rows) {
-                        if (my !== seq) { return; }
-                        list.innerHTML = '';
-                        rows.forEach(function (p) { var o = document.createElement('option'); o.value = p.value; if (p.label) { o.textContent = p.label; } list.appendChild(o); });
-                    })
-                    .catch(function () {});
-            }, 200);
+    /* ---------- pilihan pemegang aset: karyawan / bidang / divisi ---------- */
+    function syncHolderPicker(pk) {
+        var type = pk.querySelector('[data-holder-type]');
+        if (!type) { return; }
+        // Bagian form yang sedang disembunyikan (jenis mutasi lain / mode ubah) tidak ikut terkirim.
+        var off = !!pk.closest('[data-move][hidden], [data-hide-on-edit][hidden]');
+        type.disabled = off;
+        pk.querySelectorAll('[data-holder]').forEach(function (sec) {
+            var show = sec.getAttribute('data-holder') === type.value;
+            sec.hidden = !show;
+            sec.querySelectorAll('input,select').forEach(function (i) { i.disabled = off || !show; i.required = !off && show; });
         });
-    })();
+    }
+    function syncHolderPickers(root) { $$('[data-holder-picker]', root || document).forEach(syncHolderPicker); }
+    document.addEventListener('change', function (e) {
+        if (e.target.matches && e.target.matches('[data-holder-type]')) {
+            var pk = e.target.closest('[data-holder-picker]');
+            syncHolderPicker(pk);
+            var first = pk.querySelector('[data-holder]:not([hidden]) input, [data-holder]:not([hidden]) select');
+            if (first) { first.focus(); }
+        }
+    });
+    document.addEventListener('hu:prepared', function (e) { syncHolderPickers(e.target); });
+    document.addEventListener('hu:holder-sync', function () { syncHolderPickers(); });
+    syncHolderPickers();
 })();

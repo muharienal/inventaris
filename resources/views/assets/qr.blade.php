@@ -66,7 +66,7 @@
                     <div class="qr-body">
                         <div class="qr" data-qr="{{ $item->verifyUrl() }}" role="img" aria-label="QR {{ $item->code }}"></div>
                         <div class="t">
-                            <span class="unit">Unit {{ $item->unit->name ?? '' }}</span>
+                            <span class="unit">Regu {{ $item->unit->name ?? '' }}</span>
                             <span class="code">{{ $item->code }}</span>
                             <span class="name">{{ $item->name }}</span>
                             @if ($item->location)<span class="loc">{{ $item->location->name }}</span>@endif

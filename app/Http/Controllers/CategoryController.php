@@ -28,7 +28,7 @@ class CategoryController extends Controller
     {
         $unit = $this->currentUnit($request->integer('unit_id'));
         $category = Category::create($this->validated($request, $unit->id) + ['unit_id' => $unit->id]);
-        Audit::log('category.create', "Menambah kategori {$category->name} di unit {$unit->name}.", $category);
+        Audit::log('category.create', "Menambah kategori {$category->name} di regu {$unit->name}.", $category);
 
         return back()->with('success', 'Kategori ditambahkan.');
     }
@@ -62,6 +62,6 @@ class CategoryController extends Controller
             'type' => [$category ? 'sometimes' : 'required', Rule::in(['aset', 'stok'])],
             'name' => ['required', 'string', 'max:100', Rule::unique('categories', 'name')->where('unit_id', $unitId)->where('type', $type)->ignore($category?->id)],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999'],
-        ], ['name.unique' => 'Nama kategori sudah ada di unit ini.']) + ['sort_order' => 0];
+        ], ['name.unique' => 'Nama kategori sudah ada di regu ini.']) + ['sort_order' => 0];
     }
 }

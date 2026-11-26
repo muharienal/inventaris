@@ -37,7 +37,7 @@
                     @foreach ($attention['inactiveHolders'] as $a)
                         <li><span class="attn-ico tone-red"><x-icon name="user" :size="16" /></span>
                             <a href="{{ route('assets.show', $a) }}"><strong>{{ $a->code }}</strong> {{ $a->name }}</a>
-                            <span class="attn-meta">Dipegang {{ $a->holder->name }} yang sudah nonaktif. Tarik ke gudang atau serahkan ke orang lain.</span></li>
+                            <span class="attn-meta">Dipegang {{ $a->holderName() }} yang sudah nonaktif. Alihkan atau tarik ke gudang.</span></li>
                     @endforeach
                     @foreach ($attention['service'] as $a)
                         <li><span class="attn-ico tone-amber"><x-icon name="wrench" :size="16" /></span>
@@ -78,7 +78,7 @@
 
             @if ($units->count() > 1)
                 <div class="card">
-                    <div class="card-head"><h2>Per Unit</h2></div>
+                    <div class="card-head"><h2>Per Regu</h2></div>
                     <div class="card-body" style="display:grid;gap:10px">
                         @foreach ($units as $row)
                             <a class="flex items-center justify-between gap-3" href="{{ route('assets.index', ['unit' => $row['unit']->id]) }}" style="color:inherit">

@@ -44,7 +44,7 @@ return [
 
     // Jenis mutasi aset.
     'movements' => [
-        'serah_terima' => 'Serah terima',
+        'serah_terima' => 'Dialihkan',
         'pindah' => 'Pindah lokasi',
         'pinjam' => 'Dipinjamkan',
         'kembali' => 'Dikembalikan',

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Manajemen Pengguna')
-@section('subtitle', 'Semua pegawai dari HaloDek. Atur siapa yang bisa masuk Inventaris dan perannya.')
+@section('subtitle', 'Atur siapa yang bisa masuk Inventaris dan perannya.')
 
 @section('content')
 {{-- Data karyawan dari HaloDek --}}
@@ -8,7 +8,7 @@
     <div class="card-body flex items-center justify-between gap-3 wrap">
         <div class="grow">
             <div class="strong">Data pegawai dari HaloDek <span class="text-xs muted" style="font-weight:400">· otomatis tiap 5 menit · {{ rtrim(config('inventaris.halodek_url'), '/') ?: 'HALODEK_URL belum diisi' }}</span></div>
-            @if ($syncEnabled)<div class="text-sm muted">Nama, NIK, divisi, bidang, jabatan, dan No. WA semua orang diatur di HaloDek. Di sini Anda hanya mengatur <strong>siapa yang bisa masuk Inventaris</strong> dan perannya.</div>@endif
+            @if ($syncEnabled)<div class="text-sm muted">Nama, NIK, divisi, bidang, jabatan, dan No. WA diatur di HaloDek, lalu disalin ke sini.</div>@endif
             <div class="text-sm muted">
                 @if (! $syncEnabled)
                     Belum tersambung. Isi <code>HALODEK_URL</code> dan <code>INVENTARIS_API_TOKEN</code> di .env (token sama dengan HaloDek).
@@ -49,14 +49,14 @@
         <input type="hidden" name="role" value="{{ $role }}">
         <div class="field grow" style="min-width:220px"><label class="label" for="q">Cari</label><div class="input-icon"><x-icon name="search" :size="16" /><input class="input" id="q" name="q" value="{{ $search }}" placeholder="Nama, NIK, bidang…" data-no-auto></div></div>
         <div class="field"><label class="label" for="state">Status</label><select class="select" id="state" name="state"><option value="semua">Semua</option><option value="aktif" @selected($state === 'aktif')>Aktif</option><option value="nonaktif" @selected($state === 'nonaktif')>Nonaktif</option></select></div>
-        <div class="field"><label class="label" for="tid">Unit</label><select class="select" id="tid" name="unit_id"><option value="">Semua</option>@foreach ($units as $t)<option value="{{ $t->id }}" @selected($unitId == $t->id)>{{ $t->name }}</option>@endforeach</select></div>
+        <div class="field"><label class="label" for="tid">Regu</label><select class="select" id="tid" name="unit_id"><option value="">Semua</option>@foreach ($units as $t)<option value="{{ $t->id }}" @selected($unitId == $t->id)>{{ $t->name }}</option>@endforeach</select></div>
     </form>
 
     @if ($users->isEmpty())
         <x-empty icon="users" title="Tidak ada pengguna" />
     @else
         <div class="table-wrap mt-4"><table class="table">
-            <thead><tr><th>Pengguna</th><th>NIK</th><th>Peran</th><th>Unit</th><th>Aset dipegang</th><th>Login terakhir</th><th></th></tr></thead>
+            <thead><tr><th>Pengguna</th><th>NIK</th><th>Peran</th><th>Regu</th><th>Aset dipegang</th><th>Login terakhir</th><th></th></tr></thead>
             <tbody>@foreach ($users as $u)
                 <tr style="{{ $u->is_active ? '' : 'opacity:.6' }}">
                     <td><div class="flex items-center gap-3"><span class="avatar sm">{{ $u->initials() }}</span>
@@ -73,7 +73,7 @@
                             @endif
                         @else
                         @if ($syncEnabled)
-                            <button class="btn btn-secondary btn-sm btn-icon" aria-label="Ubah akses {{ $u->name }}" title="Ubah peran / unit" data-modal-open="edit-access-modal" data-title="Ubah Akses · {{ $u->name }}" data-action="{{ route('users.update', $u) }}"
+                            <button class="btn btn-secondary btn-sm btn-icon" aria-label="Ubah akses {{ $u->name }}" title="Ubah peran / regu" data-modal-open="edit-access-modal" data-title="Ubah Akses · {{ $u->name }}" data-action="{{ route('users.update', $u) }}"
                                     data-fill="{{ json_encode(['role' => $u->role, 'unit_id' => $u->unit_id, 'is_active' => $u->is_active]) }}"><x-icon name="edit" :size="15" /></button>
                         @else
                             <button class="btn btn-secondary btn-sm btn-icon" aria-label="Ubah" data-modal-open="user-modal" data-title="Ubah Pengguna" data-action="{{ route('users.update', $u) }}"
@@ -101,11 +101,17 @@
 
 @push('modals')
     @if ($syncEnabled)
-    {{-- Beri akses: pilih orang dari data HaloDek, lalu peran & unit. --}}
+    {{-- Beri akses: pilih orang dari data HaloDek, lalu peran & regu. --}}
     <x-form-modal id="access-modal" create-title="Beri Akses Inventaris" :action="route('users.store')" submit="Beri Akses">
         <div style="display:grid;gap:16px">
-            <x-input name="nik" label="Orang" required list="people-list" autocomplete="off" placeholder="Ketik NIK atau nama" hint="Hanya orang yang sudah ada di HaloDek. Orang baru ditambahkan dulu di HaloDek (Manajemen Pengguna)." />
-            <datalist id="people-list" data-people-src="{{ route('people.search', ['scope' => 'tanpa-akses']) }}"></datalist>
+            <x-select name="nik" label="Orang" required hint="Hanya orang yang sudah ada di HaloDek dan belum punya akses. Orang baru ditambahkan dulu di HaloDek (Manajemen Pengguna).">
+                <option value="">- Pilih orang -</option>
+                @foreach ($candidates->groupBy(fn ($u) => (string) $u->department) as $dept => $rows)
+                    <optgroup label="{{ $dept !== '' ? 'Bidang '.$dept : 'Tanpa bidang' }}">
+                        @foreach ($rows as $u)<option value="{{ $u->nik }}" @selected((string) old('nik') === (string) $u->nik)>{{ $u->name }} ({{ $u->nik }})</option>@endforeach
+                    </optgroup>
+                @endforeach
+            </x-select>
             @include('users._access-fields', ['prefix' => 'a'])
             <p class="hint" style="margin:0">Password sementara ditampilkan sekali setelah disimpan dan wajib diganti saat masuk pertama.</p>
         </div>
@@ -140,12 +146,12 @@
                 </x-select>
                 <p class="hint" id="user-role-desc" style="margin-top:-8px"></p>
                 <div class="field" id="user-teams">
-                    <label class="label" for="user-team-id">Unit kelolaan <span class="req">*</span></label>
+                    <label class="label" for="user-team-id">Regu kelolaan <span class="req">*</span></label>
                     <select class="select" id="user-team-id" name="unit_id">
-                        <option value="">- Pilih unit -</option>
+                        <option value="">- Pilih regu -</option>
                         @foreach ($units as $t)<option value="{{ $t->id }}" @selected(old('unit_id') == $t->id)>{{ $t->name }}</option>@endforeach
                     </select>
-                    <p class="hint">Pengelola hanya bisa mengelola aset dan stok di unit ini.</p>
+                    <p class="hint">Pengelola hanya bisa mengelola aset dan stok regu ini.</p>
                     @error('unit_id')<span class="error">{{ $message }}</span>@enderror
                 </div>
                 <label class="check" data-show-on-edit hidden><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" checked> Akun aktif (bisa masuk)</label>
@@ -154,7 +160,7 @@
         </div>
     </x-form-modal>
     @endif
-    <x-import-modal :action="route('users.import')" :template="route('users.template')" title="Beri Akses Massal (CSV)" columns="nik, role (superadmin, manajer, kepala_regu, staf), unit (untuk kepala_regu/staf)" />
+    <x-import-modal :action="route('users.import')" :template="route('users.template')" title="Beri Akses Massal (CSV)" columns="nik, role (superadmin, manajer, kepala_regu, staf), regu (kode regu, untuk kepala_regu/staf)" />
 @endpush
 
 @push('scripts')
@@ -162,8 +168,8 @@
 (function () {
     var role = document.getElementById('user-role'), box = document.getElementById('user-teams'), desc = document.getElementById('user-role-desc');
     var texts = {
-        superadmin: 'Mengelola seluruh aplikasi, semua unit, dan akses pengguna.',
-        manajer: 'Melihat semua unit tanpa mengubah data.',
+        superadmin: 'Mengelola seluruh aplikasi, semua regu, dan akses pengguna.',
+        manajer: 'Melihat semua regu tanpa mengubah data.',
         kepala_regu: 'Mengelola penuh unitnya, termasuk kategori, lokasi, hapus, dan impor.',
         staf: 'Pekerjaan harian unitnya: aset, mutasi, servis, dan stok.'
     };
@@ -177,7 +183,7 @@
         sync();
     }
 
-    // Form akses (Beri akses / Ubah akses): unit hanya untuk Kepala Regu & Staf.
+    // Form akses (Beri akses / Ubah akses): regu hanya untuk Kepala Regu & Staf.
     document.querySelectorAll('[data-access-role]').forEach(function (sel) {
         var unit = document.getElementById(sel.getAttribute('data-access-role')), help = document.getElementById(sel.id + '-desc');
         function s2() {

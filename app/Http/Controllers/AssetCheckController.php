@@ -18,7 +18,7 @@ class AssetCheckController extends Controller
     public function show(Request $request, int $asset, string $token): View
     {
         $item = $this->resolve($asset, $token);
-        $item->load(['unit', 'category', 'holder', 'location', 'photos']);
+        $item->load(['unit', 'category', 'holder', 'holderOrg', 'location', 'photos']);
 
         $user = $request->user();
 

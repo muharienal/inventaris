@@ -59,6 +59,7 @@ class LoginController extends Controller
     private function finish(Request $request): RedirectResponse
     {
         $request->session()->regenerate();
+        $request->session()->forget('pwa_prompt_seen'); // ajakan pasang aplikasi muncul lagi tiap login
         $request->user()->forceFill(['last_login_at' => now()])->saveQuietly();
 
         return redirect()->intended(route('dashboard'))

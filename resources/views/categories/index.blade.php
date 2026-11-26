@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Kategori')
-@section('subtitle', 'Pengelompokan aset dan barang habis pakai unit '.$unit->name)
+@section('subtitle', 'Pengelompokan aset dan barang habis pakai di setiap regu.')
 
 @section('content')
 @if ($units->count() > 1)

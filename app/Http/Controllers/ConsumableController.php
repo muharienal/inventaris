@@ -109,7 +109,7 @@ class ConsumableController extends Controller
 
         $m = $this->stock->adjust($consumable, $request->user(), $data['type'], (int) $data['qty'], $data['note'] ?? null, $data['recipient'] ?? null);
 
-        return back()->with('success', "Stok {$consumable->name}: {$m->typeLabel()} ".($m->qty >= 0 ? '+' : '')."{$m->qty}, sisa {$m->stock_after} {$consumable->unit_label}.");
+        return back()->with('success', "{$consumable->name}: ".($m->qty >= 0 ? '+' : '')."{$m->qty} {$consumable->unit_label} ({$m->typeLabel()}), sisa {$m->stock_after} {$consumable->unit_label}.");
     }
 
     public function export(Request $request): BinaryFileResponse
@@ -138,6 +138,6 @@ class ConsumableController extends Controller
             'min_stock' => ['required', 'integer', 'min:0', 'max:1000000'],
             'location_id' => ['nullable', 'integer', Rule::exists('locations', 'id')],
             'notes' => ['nullable', 'string', 'max:2000'],
-        ], ['code.unique' => 'Kode barang sudah dipakai di unit ini.']);
+        ], ['code.unique' => 'Kode barang sudah dipakai di regu ini.']);
     }
 }

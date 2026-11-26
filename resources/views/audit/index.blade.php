@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Log Aktivitas')
-@section('subtitle', 'Jejak perubahan penting yang dilakukan admin')
+@section('subtitle', 'Jejak perubahan penting: kapan, oleh siapa, dan apa yang diubah.')
 
 @php
     $verbs = ['create' => 'Tambah', 'update' => 'Ubah', 'delete' => 'Hapus', 'import' => 'Impor', 'move' => 'Mutasi', 'service' => 'Servis',

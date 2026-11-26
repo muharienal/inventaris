@@ -41,7 +41,7 @@ class StockManager
                 'user_id' => $actor->id,
             ]);
 
-            Audit::log('stock.'.$type, "Stok {$item->code} {$movement->typeLabel()} ".($delta >= 0 ? '+' : '')."{$delta}, sisa {$item->stock}.", $item);
+            Audit::log('stock.'.$type, (['masuk' => 'Stok masuk', 'keluar' => 'Stok keluar'][$type] ?? 'Penyesuaian stok')." {$item->code} ({$item->name}): ".($delta >= 0 ? '+' : '')."{$delta} {$item->unit_label}, sisa {$item->stock} {$item->unit_label}.", $item);
 
             return $movement;
         });

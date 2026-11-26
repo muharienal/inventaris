@@ -1,4 +1,4 @@
-@props(['id' => 'import-modal', 'action', 'template', 'title' => 'Impor dari CSV', 'columns' => ''])
+@props(['id' => 'import-modal', 'action', 'template', 'title' => 'Impor dari CSV', 'columns' => '', 'note' => null])
 <div class="modal" id="{{ $id }}" role="dialog" aria-modal="true">
     <div class="modal-dialog">
         <form method="POST" action="{{ $action }}" enctype="multipart/form-data">
@@ -13,7 +13,7 @@
                     <li>Simpan dari Excel sebagai <em>CSV (Comma/Semicolon delimited)</em>.</li>
                     <li>Unggah file di bawah ini. Baris yang bermasalah dilewati dan dilaporkan.</li>
                 </ol>
-                @if ($columns)<p class="hint mb-3">Kolom: <span class="mono">{{ $columns }}</span></p>@endif
+                @if ($columns)<p class="hint mb-3">Kolom: <span class="mono">{{ $columns }}</span>@if ($note)<br>{{ $note }}@endif</p>@endif
                 <label class="drop" for="{{ $id }}-file" style="display:block">
                     <x-icon name="upload" :size="24" />
                     <p class="strong mt-2">Pilih file CSV</p>

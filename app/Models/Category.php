@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/** Kategori per unit. type = "aset" (barang tahan lama) atau "stok" (habis pakai). */
+/** Kategori per unit. type = "aset" (peralatan, perangkat, kendaraan, fasilitas) atau "stok" (habis pakai). */
 class Category extends Model
 {
     protected $fillable = ['unit_id', 'type', 'name', 'sort_order'];

@@ -3,10 +3,10 @@
 </x-select>
 <p class="hint" id="{{ $prefix }}-role-desc" style="margin-top:-8px"></p>
 <div class="field" id="{{ $prefix }}-unit-box">
-    <label class="label" for="{{ $prefix }}-unit">Unit kelolaan <span class="req">*</span></label>
+    <label class="label" for="{{ $prefix }}-unit">Regu kelolaan <span class="req">*</span></label>
     <select class="select" id="{{ $prefix }}-unit" name="unit_id">
-        <option value="">- Pilih unit -</option>
+        <option value="">- Pilih regu -</option>
         @foreach ($units as $t)<option value="{{ $t->id }}">{{ $t->name }}</option>@endforeach
     </select>
-    <p class="hint">Hanya bisa mengelola aset dan stok di unit ini.</p>
+    <p class="hint">Hanya bisa mengelola aset dan stok regu ini.</p>
 </div>

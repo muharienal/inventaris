@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\AssetReport;
 use App\Models\Location;
+use App\Models\OrgUnit;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -18,9 +19,9 @@ use Illuminate\Validation\Rule;
  *  GET  /api/v1/ping
  *  GET  /api/v1/units
  *  GET  /api/v1/locations
- *  GET  /api/v1/assets?unit=it&location_id=3&holder_nik=00004&include_id=12&q=lenovo
- *       -> aset aktif yang boleh dilaporkan: dipegang NIK tsb, atau tanpa pemegang di lokasi tsb,
- *          plus "include_id" (aset yang baru dipindai QR-nya).
+ *  GET  /api/v1/assets?unit=it&location_id=3&holder_nik=00004&holder_department=Umum%20%26%20IT&holder_division=...&include_id=12&q=lenovo
+ *       -> aset aktif yang boleh dilaporkan: dipegang NIK tsb, dipegang bidang/divisi orang tsb,
+ *          tidak dipegang perorangan di lokasi tsb, plus "include_id" (aset yang baru dipindai QR-nya).
  *  GET  /api/v1/assets/{id}
  *  POST /api/v1/report-events   (HaloDek mengabarkan laporan kendala sebuah aset dibuat/berubah)
  */
@@ -54,14 +55,22 @@ class InventoryApiController extends Controller
 
         $locationId = $request->integer('location_id') ?: null;
         $holder = $request->filled('holder_nik') ? User::where('nik', (string) $request->query('holder_nik'))->first() : null;
+        // Aset milik bidang / divisi pelapor juga boleh dilaporkan. Nama dari HaloDek (paling baru) diutamakan.
+        $orgIds = $request->filled('holder_nik') ? OrgUnit::idsForPerson(
+            $request->filled('holder_department') ? (string) $request->query('holder_department') : $holder?->department,
+            $request->filled('holder_division') ? (string) $request->query('holder_division') : $holder?->division,
+        ) : [];
         $includeId = $request->integer('include_id') ?: null;
         $q = trim((string) $request->query('q'));
 
-        $assets = Asset::with(['location', 'holder', 'category', 'unit'])->where('unit_id', $unit->id)->active()
-            ->where(function ($w) use ($holder, $locationId, $includeId) {
+        $assets = Asset::with(['location', 'holder', 'holderOrg', 'category', 'unit'])->where('unit_id', $unit->id)->active()
+            ->where(function ($w) use ($holder, $orgIds, $locationId, $includeId) {
                 $w->whereRaw('1 = 0');
                 if ($holder) {
                     $w->orWhere('holder_id', $holder->id);
+                }
+                if ($orgIds) {
+                    $w->orWhere(fn ($x) => $x->whereNull('holder_id')->whereIn('holder_org_id', $orgIds));
                 }
                 if ($locationId) {
                     $w->orWhere(fn ($x) => $x->whereNull('holder_id')->where('location_id', $locationId));
@@ -78,7 +87,7 @@ class InventoryApiController extends Controller
 
     public function show(int $id): JsonResponse
     {
-        $asset = Asset::with(['location', 'holder', 'category', 'unit'])->find($id);
+        $asset = Asset::with(['location', 'holder', 'holderOrg', 'category', 'unit'])->find($id);
 
         return $asset ? response()->json(['data' => $this->present($asset)]) : response()->json(['message' => 'Aset tidak ditemukan.'], 404);
     }
@@ -96,7 +105,10 @@ class InventoryApiController extends Controller
             'status' => $asset->status,
             'active' => $asset->isActive(),
             'location' => $asset->location ? ['id' => $asset->location->id, 'name' => $asset->location->name, 'label' => $asset->location->fullName()] : null,
-            'holder' => $asset->holder ? ['nik' => $asset->holder->nik, 'name' => $asset->holder->name] : null,
+            // type: orang | bidang | divisi. nik hanya untuk orang.
+            'holder' => $asset->holder_id && $asset->holder
+                ? ['type' => 'orang', 'nik' => $asset->holder->nik, 'name' => $asset->holder->name]
+                : ($asset->holder_org_id && $asset->holderOrg ? ['type' => $asset->holderOrg->type, 'nik' => null, 'name' => $asset->holderOrg->label()] : null),
             'url' => route('assets.show', $asset),
             // Halaman cek aset tanpa login (sama dengan isi stiker QR): aman dibuka siapa pun di HaloDek.
             'check_url' => $asset->verifyUrl(),

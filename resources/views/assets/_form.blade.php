@@ -28,14 +28,14 @@
                 @foreach (config('inventaris.conditions') as $k => $s)<option value="{{ $k }}" @selected(old('condition', 'baik') === $k)>{{ $s['label'] }}</option>@endforeach
             </x-select>
         </div>
-        <div class="form-grid" data-hide-on-edit>
+        <div data-hide-on-edit style="display:grid;gap:14px">
             <x-select name="location_id" label="Lokasi">
                 <option value="">- Belum ditentukan -</option>
                 @foreach ($locations as $l)<option value="{{ $l->id }}" @selected(old('location_id') == $l->id)>{{ $l->fullName() }}</option>@endforeach
             </x-select>
-            <x-input name="holder_nik" label="Pemegang (NIK)" list="people-list" maxlength="80" placeholder="Ketik NIK atau nama" hint="Kosongkan bila aset di gudang / dipakai bersama." />
+            @include('assets._holder-picker', ['p' => 'asset', 'none' => true, 'label' => 'Pemegang'])
         </div>
-        <p class="hint" data-show-on-edit hidden style="margin:0">Pemegang dan lokasi diubah lewat tombol <strong>Serah terima</strong>, <strong>Pindah lokasi</strong>, atau <strong>Pinjamkan</strong> agar riwayatnya tercatat.</p>
+        <p class="hint" data-show-on-edit hidden style="margin:0">Pemegang dan lokasi diubah lewat tombol <strong>Alihkan</strong>, <strong>Pinjamkan</strong>, atau <strong>Pindah Lokasi</strong> agar riwayatnya tercatat.</p>
     </div>
 
     <div class="form-section">
@@ -62,4 +62,3 @@
         <p class="error" id="asset-photo-err" hidden></p>
     </div>
 </div>
-<datalist id="people-list" data-people-src="{{ route('people.search') }}"></datalist>

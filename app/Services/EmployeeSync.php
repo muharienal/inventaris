@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\OrgUnit;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Support\Facades\Cache;
@@ -14,7 +15,7 @@ use Throwable;
  * Data karyawan (pemegang aset) diambil dari HaloDek: GET {HALODEK_URL}/api/v1/employees.
  *
  * - Karyawan baru dibuat sebagai "Karyawan" (tanpa akun, tidak bisa masuk).
- * - Nama/departemen/jabatan/No. HP/status karyawan yang sudah ada diperbarui mengikuti HaloDek.
+ * - Nama/divisi/bidang/jabatan/No. WA/status karyawan yang sudah ada diperbarui mengikuti HaloDek.
  * - Karyawan yang tidak ada lagi di HaloDek dinonaktifkan (tidak dihapus: riwayat asetnya tetap).
  * - Akun Superadmin/Manajer/Kepala Regu/Staf dengan NIK yang sama TIDAK diubah.
  *
@@ -119,15 +120,79 @@ class EmployeeSync
             }
         });
 
+        $org = $this->syncOrganization();
+
         $result = [
             'ok' => true, 'total' => $rows->count(), 'created' => $created, 'updated' => $updated, 'deactivated' => $deactivated,
-            'message' => "Data pegawai diambil dari HaloDek: {$rows->count()} orang ({$created} baru, {$updated} diperbarui, {$deactivated} dinonaktifkan).",
+            'message' => "Data pegawai diambil dari HaloDek: {$rows->count()} orang ({$created} baru, {$updated} diperbarui, {$deactivated} dinonaktifkan)."
+                .($org !== null ? " Struktur: {$org['divisions']} divisi, {$org['departments']} bidang." : ''),
         ];
         if ($created || $updated || $deactivated) {
             Audit::log('user.sync', $result['message']);
         }
 
         return $this->remember($result);
+    }
+
+    /**
+     * Struktur Divisi -> Bidang dari HaloDek (GET /api/v1/organization), untuk pemegang aset berupa bidang/divisi.
+     * Dicocokkan lewat id HaloDek (nama boleh berubah); yang sudah tidak ada dinonaktifkan, tidak dihapus.
+     * HaloDek versi lama tanpa API ini: struktur dibentuk dari isian divisi/bidang pegawai.
+     *
+     * @return array{divisions:int, departments:int}|null
+     */
+    private function syncOrganization(): ?array
+    {
+        try {
+            $response = Http::baseUrl($this->baseUrl().'/api/v1/')
+                ->withToken((string) config('inventaris.api_token'))
+                ->acceptJson()->connectTimeout(3)->timeout(15)
+                ->get('organization');
+            $data = $response->successful() && $response->json('app') === 'HaloDek' ? $response->json('data') : null;
+        } catch (Throwable $e) {
+            $data = null;
+        }
+
+        if (! is_array($data) || ! is_array($data['divisions'] ?? null) || ! is_array($data['departments'] ?? null)) {
+            OrgUnit::syncFromUsers();
+
+            return null;
+        }
+
+        $clean = fn ($rows) => collect($rows)->filter(fn ($r) => is_array($r) && is_numeric($r['id'] ?? null) && is_scalar($r['name'] ?? null) && trim((string) $r['name']) !== '');
+        $divisions = $clean($data['divisions']);
+        $departments = $clean($data['departments']);
+        if ($divisions->isEmpty() && $departments->isEmpty()) {
+            return ['divisions' => 0, 'departments' => 0]; // kemungkinan salah konfigurasi: struktur lama dibiarkan
+        }
+
+        DB::transaction(function () use ($divisions, $departments) {
+            $map = [];
+            foreach ([OrgUnit::DIVISI => $divisions, OrgUnit::BIDANG => $departments] as $type => $rows) {
+                $keep = [];
+                foreach ($rows as $r) {
+                    $name = mb_substr(trim((string) $r['name']), 0, 100);
+                    $unit = OrgUnit::where('type', $type)->where('halodek_id', (int) $r['id'])->first()
+                        ?? OrgUnit::where('type', $type)->whereNull('halodek_id')->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first()
+                        ?? new OrgUnit(['type' => $type]);
+                    $unit->fill([
+                        'halodek_id' => (int) $r['id'], 'name' => $name, 'is_active' => true,
+                        'sort_order' => is_numeric($r['sort_order'] ?? null) ? max(0, min(65535, (int) $r['sort_order'])) : 0,
+                        'parent_id' => $type === OrgUnit::BIDANG && is_numeric($r['division_id'] ?? null) ? ($map[(int) $r['division_id']] ?? null) : null,
+                    ]);
+                    if (! $unit->exists || $unit->isDirty()) {
+                        $unit->save();
+                    }
+                    if ($type === OrgUnit::DIVISI) {
+                        $map[(int) $r['id']] = $unit->id;
+                    }
+                    $keep[] = $unit->id;
+                }
+                OrgUnit::where('type', $type)->where('is_active', true)->whereNotIn('id', $keep ?: [0])->update(['is_active' => false]);
+            }
+        });
+
+        return ['divisions' => $divisions->count(), 'departments' => $departments->count()];
     }
 
     /** Hasil sinkron terakhir (untuk ditampilkan di menu Pengguna). */

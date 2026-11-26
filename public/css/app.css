@@ -97,7 +97,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .side-link.active { background: #fff; color: var(--pine); font-weight: 700; }
 .side-link.active svg { opacity: 1; color: var(--teal); }
 .side-count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 4px; background: var(--orange); color: #fff; font-size: 11.5px; font-weight: 700; line-height: 20px; text-align: center; }
-.side-foot { padding: 14px 20px 18px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: 11.5px; color: #86ACA1; line-height: 1.35; }
 .side-co, .bar-co { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 4px; border-radius: 8px; background: #fff; }
 .side-co img, .bar-co img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .side-sep { width: 1px; height: 24px; background: rgba(255, 255, 255, .18); flex: none; }
@@ -618,3 +617,18 @@ body.lb-open { overflow: hidden; }
     .asset-layout .o-1 { order: 1; } .asset-layout .o-2 { order: 2; } .asset-layout .o-3 { order: 3; }
     .asset-layout .o-4 { order: 4; } .asset-layout .o-5 { order: 5; } .asset-layout .o-6 { order: 6; }
 }
+
+:root { --pwa-bd: #A9D8CB; --pwa-bg: #E6F3EF; --pwa-bg-h: #D4EBE4; --pwa-fg: #0A6455; --pwa-soft: #F0F7F5; }
+/* ---------- Pasang aplikasi (PWA) ---------- */
+.app-chip { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px 0 12px; border-radius: 99px; border: 1px solid var(--pwa-bd); background: var(--pwa-bg); color: var(--pwa-fg); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .12s; }
+.app-chip:hover { background: var(--pwa-bg-h); }
+.is-standalone [data-pwa-chip] { display: none !important; }
+.pwa-intro { display: flex; gap: 14px; align-items: center; }
+.pwa-intro img { flex: none; border-radius: 14px; }
+.pwa-steps ol { margin: 0; padding: 14px 16px 14px 34px; border-radius: 14px; background: var(--pwa-soft); display: grid; gap: 8px; font-size: 14px; line-height: 1.5; }
+.pwa-inline { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--pwa-soft); }
+.pwa-inline img { flex: none; border-radius: 10px; }
+.pwa-inline .grow { display: grid; gap: 2px; min-width: 0; }
+@media (max-width: 720px) { .app-chip-t { display: none; } .app-chip { width: 38px; padding: 0; justify-content: center; } }
+.pwa-note { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #FFF4D6; border: 1px solid #F2C46D; color: #7A4300; font-size: 13.5px; line-height: 1.5; }
+.pwa-admin { display: block; margin-top: 4px; font-weight: 700; }

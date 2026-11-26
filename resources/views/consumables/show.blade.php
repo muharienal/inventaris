@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', $item->name)
-@section('subtitle', $item->code.' · '.$item->unit->name)
+@section('subtitle', 'Kode '.$item->code)
 
 @section('content')
 <div class="detail-head mb-4">
@@ -9,7 +9,7 @@
         <dl class="meta-list">
             <div><dt>Stok</dt><dd><x-badge :tone="$item->stockTone()">{{ $item->stock }} {{ $item->unit_label }}</x-badge></dd></div>
             <div><dt>Minimum</dt><dd>@if ($item->isLow())<span class="note-flag is-red"><x-icon name="alert" :size="14" /> Di bawah minimum ({{ $item->min_stock }})</span>@else<span class="text-sm">{{ $item->min_stock }} {{ $item->unit_label }}</span>@endif</dd></div>
-            <div><dt>Unit</dt><dd><x-unit-chip :unit="$item->unit" /></dd></div>
+            <div><dt>Regu</dt><dd><x-unit-chip :unit="$item->unit" /></dd></div>
             @unless ($item->is_active)<div><dt>Keadaan</dt><dd><x-badge tone="gray">Nonaktif</x-badge></dd></div>@endunless
         </dl>
         @manage

@@ -6,6 +6,7 @@ use App\Models\Asset;
 use App\Models\Category;
 use App\Models\Consumable;
 use App\Models\Location;
+use App\Models\OrgUnit;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AssetManager;
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  */
 class DemoSeeder extends Seeder
 {
-    /** [nik, nama, peran, divisi, bidang, jabatan, unit, aktif] - sama dengan HaloDek. */
+    /** [nik, nama, peran, divisi, bidang, jabatan, regu, aktif] - sama dengan HaloDek. */
     public const PEOPLE = [
         ['00001', 'Superadmin Inventaris', 'superadmin', 'SDM, Umum & K3', 'Umum & IT', 'Superadmin', null, true],
         ['00011', 'Bambang Hartono', 'manajer', 'SDM, Umum & K3', 'Umum & IT', 'Manajer Umum & IT', null, true],
@@ -74,6 +75,7 @@ class DemoSeeder extends Seeder
 
         try {
             $this->people();
+            OrgUnit::syncFromUsers(); // Divisi & bidang dari data pegawai (nanti dicocokkan dengan HaloDek saat sinkron)
             $locs = collect(self::LOCATIONS)->map(fn ($l) => Location::firstOrCreate(['name' => $l[0]], ['building' => $l[1], 'floor' => $l[2]]))->values();
             if (Asset::exists()) {
                 return;
@@ -142,11 +144,11 @@ class DemoSeeder extends Seeder
         }
 
         $it = 'it';
-        $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0200', 'Epson L3250', ['brand' => 'Epson', 'model' => 'L3250', 'location_id' => $loc(2),
+        $printFin = $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0200', 'Epson L3250', ['brand' => 'Epson', 'model' => 'L3250', 'location_id' => $loc(2),
             'purchase_date' => $realNow->copy()->subYears(2)->toDateString(), 'service_interval_months' => 3, 'next_service_at' => $realNow->copy()->subDays(4)->toDateString()], $realNow, 60);
-        $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0201', 'HP LaserJet Pro M404dn', ['brand' => 'HP', 'model' => 'M404dn', 'location_id' => $loc(3),
+        $printHr = $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0201', 'HP LaserJet Pro M404dn', ['brand' => 'HP', 'model' => 'M404dn', 'location_id' => $loc(3),
             'purchase_date' => $realNow->copy()->subYears(3)->toDateString(), 'condition' => 'rusak_ringan'], $realNow, 60);
-        $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0202', 'Scanner Fujitsu fi-7160', ['brand' => 'Fujitsu', 'model' => 'fi-7160', 'location_id' => $loc(2),
+        $scan = $this->make($it, $cat($it, 'Printer & Scanner'), 'AST-0202', 'Scanner Fujitsu fi-7160', ['brand' => 'Fujitsu', 'model' => 'fi-7160', 'location_id' => $loc(2),
             'purchase_date' => $realNow->copy()->subMonths(14)->toDateString()], $realNow, 60);
         $this->make($it, $cat($it, 'Jaringan'), 'NET-001', 'Switch Cisco SG350-28', ['brand' => 'Cisco', 'model' => 'SG350-28', 'location_id' => $loc(4),
             'purchase_date' => $realNow->copy()->subYears(3)->toDateString(), 'status' => 'digunakan'], $realNow, 60);
@@ -190,7 +192,7 @@ class DemoSeeder extends Seeder
         $this->make($sp, $cat($sp, 'Ruangan'), 'RG-001', 'Ruang Rapat Utama', ['location_id' => $loc(1), 'status' => 'digunakan', 'notes' => 'Kapasitas 20 orang'], $realNow, 60);
 
         $ks = 'kesekretariatan';
-        $this->make($ks, $cat($ks, 'Peralatan Rapat'), 'KS-RR-01', 'Smart TV Samsung 55"', ['brand' => 'Samsung', 'location_id' => $loc(1), 'status' => 'digunakan',
+        $tv = $this->make($ks, $cat($ks, 'Peralatan Rapat'), 'KS-RR-01', 'Smart TV Samsung 55"', ['brand' => 'Samsung', 'location_id' => $loc(1), 'status' => 'digunakan',
             'purchase_date' => $realNow->copy()->subYear()->toDateString()], $realNow, 60);
         $this->make($ks, $cat($ks, 'Peralatan Kantor'), 'KS-KTR-01', 'Mesin Fotokopi Canon iR 2625', ['brand' => 'Canon', 'model' => 'iR 2625', 'location_id' => $loc(6), 'status' => 'digunakan',
             'purchase_date' => $realNow->copy()->subYears(2)->toDateString(), 'service_interval_months' => 2, 'next_service_at' => $realNow->copy()->subDays(8)->toDateString()], $realNow, 60);
@@ -216,6 +218,16 @@ class DemoSeeder extends Seeder
             'purchase_date' => $realNow->copy()->subYears(7)->toDateString(), 'notes' => 'Menunggu penghapusan aset'], $realNow, 60);
 
         // ---- riwayat mutasi & servis
+        // Pemegang bisa bidang / divisi: printer & scanner dipakai bersama satu bidang/divisi.
+        $org = fn (string $type, string $name) => OrgUnit::where('type', $type)->where('name', $name)->firstOrFail()->id;
+        $this->at($realNow, 55);
+        $this->manager->move($printFin, $this->heads['it'], 'serah_terima', ['holder_org_id' => $org('bidang', 'Akuntansi & Keuangan'), 'note' => 'Printer bersama bidang Akuntansi & Keuangan.']);
+        $this->manager->move($printHr, $this->heads['it'], 'serah_terima', ['holder_org_id' => $org('bidang', 'SDM'), 'note' => 'Printer bersama bidang SDM.']);
+        $this->manager->move($scan, $this->heads['it'], 'serah_terima', ['holder_org_id' => $org('divisi', 'Keuangan'), 'note' => 'Scanner arsip untuk seluruh divisi Keuangan.']);
+        $this->at($realNow, 2, 15);
+        $this->manager->move($tv, $this->heads['kesekretariatan'], 'pinjam', ['holder_org_id' => $org('bidang', 'Marketing & Penjualan'), 'location_id' => $loc(8),
+            'due_back_at' => $realNow->copy()->addDays(5)->toDateString(), 'note' => 'Pameran produk di Ruang Marketing.']);
+
         $this->at($realNow, 50);
         $this->manager->move($ht1, $this->heads['keamanan'], 'serah_terima', ['holder_id' => $person('00016')->id, 'note' => 'HT jaga shift pagi.']);
         $this->manager->move($ht2, $this->heads['keamanan'], 'serah_terima', ['holder_id' => $person('00017')->id, 'note' => 'HT jaga shift malam.']);
@@ -262,7 +274,7 @@ class DemoSeeder extends Seeder
         $unit = fn (string $c) => Unit::where('code', $c)->first();
         $cat = fn (string $u, string $name) => Category::where('unit_id', $unit($u)->id)->where('type', 'stok')->where('name', $name)->firstOrFail();
 
-        // [unit, kategori, kode, nama, satuan, stok awal, minimum, [ [hari lalu, jumlah keluar, penerima], ... ]]
+        // [regu, kategori, kode, nama, satuan, stok awal, minimum, [ [hari lalu, jumlah keluar, penerima], ... ]]
         $items = [
             ['it', 'Tinta & Toner', 'TNT-EPS-BK', 'Tinta Epson 003 Hitam', 'botol', 10, 4, [[40, 2, 'Budi Santoso (Keuangan)'], [21, 3, 'Fajar Nugroho (Keuangan)'], [6, 2, 'Siti Aisyah (HRD)']]],
             ['it', 'Tinta & Toner', 'TNR-HP-59A', 'Toner HP 59A', 'pcs', 4, 2, [[15, 1, 'Wulan Sari (HRD)']]],

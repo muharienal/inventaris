@@ -25,7 +25,7 @@
                     <div><dt>Jabatan</dt><dd>{{ $user->position ?: '-' }}</dd></div>
                     @if ($central)<div><dt>No. WhatsApp</dt><dd>{{ $user->phone ?: '-' }}</dd></div>@endif
                     @if ($user->isAdmin())
-                        <div><dt>Unit yang Anda kelola</dt><dd>@if ($user->unit)<x-unit-chip :unit="$user->unit" />@else{{ $user->isSuperadmin() || $user->isManajer() ? 'Semua unit' : '-' }}@endif</dd></div>
+                        <div><dt>Regu yang Anda kelola</dt><dd>@if ($user->unit)<x-unit-chip :unit="$user->unit" />@else{{ $user->isSuperadmin() || $user->isManajer() ? 'Semua regu' : '-' }}@endif</dd></div>
                     @endif
                 </dl>
                 @if ($central)

@@ -25,7 +25,7 @@
 
     <section class="auth-copyblock">
         <h1 class="auth-title">Kelola aset dan stok kantor dengan mudah.</h1>
-        <p class="auth-lead">Catat pemegang, lokasi, jadwal servis, dan stok barang habis pakai Bidang Umum dan IT dalam satu aplikasi.</p>
+        <p class="auth-lead">Catat pemegang, lokasi, jadwal servis, dan stok barang habis pakai Bidang Umum &amp; IT dalam satu aplikasi.</p>
     </section>
 
     <main class="auth-panel">

@@ -8,6 +8,7 @@ use App\Models\AssetPhoto;
 use App\Models\AssetService;
 use App\Models\Category;
 use App\Models\Location;
+use App\Models\OrgUnit;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\AssetManager;
@@ -27,9 +28,9 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Aset (barang tahan lama) per unit.
+ * Aset (peralatan, perangkat, kendaraan, fasilitas) per unit.
  *  - Pengelola: kelola aset unitnya. Superadmin: semua unit.
- *  - Karyawan: hanya melihat aset yang sedang ia pegang / pinjam.
+ *  - Pemegang: satu karyawan, satu bidang, atau satu divisi (struktur dari HaloDek).
  * Pemegang & lokasi TIDAK diubah lewat form edit, tetapi lewat mutasi agar riwayatnya tercatat.
  */
 class AssetController extends Controller
@@ -37,7 +38,7 @@ class AssetController extends Controller
     use HandlesCsvImport;
 
     private const CSV_HEADER = [
-        'category', 'code', 'name', 'brand', 'model', 'serial_number', 'status', 'condition', 'holder_nik', 'location',
+        'category', 'code', 'name', 'brand', 'model', 'serial_number', 'status', 'condition', 'holder_nik', 'holder_org', 'location',
         'purchase_date', 'vendor', 'due_date', 'next_service_at', 'service_interval_months', 'specs', 'notes',
     ];
 
@@ -51,7 +52,7 @@ class AssetController extends Controller
         $f = $this->filters($request);
 
         $assets = $this->query($unit, $f)
-            ->with(['category', 'holder', 'location'])
+            ->with(['category', 'holder', 'holderOrg', 'location'])
             ->orderBy('code')
             ->paginate(config('inventaris.per_page'))
             ->withQueryString();
@@ -66,6 +67,7 @@ class AssetController extends Controller
             'statusCounts' => $statusCounts,
             'categories' => $unit->categories()->where('type', 'aset')->withCount('assets')->get(),
             'locations' => Location::orderBy('name')->get(['id', 'name', 'building', 'floor']),
+            'org' => OrgUnit::choices(),
         ]);
     }
 
@@ -74,7 +76,7 @@ class AssetController extends Controller
         $user = $request->user();
         $this->authorizeUnit($asset->unit_id);
 
-        $asset->load(['unit', 'category', 'holder', 'location', 'photos']);
+        $asset->load(['unit', 'category', 'holder', 'holderOrg', 'location', 'photos']);
 
         // Riwayat gabungan: mutasi + servis + laporan kendala HaloDek, terbaru di atas.
         $timeline = collect()
@@ -93,6 +95,7 @@ class AssetController extends Controller
             'openReports' => $asset->reports()->whereIn('status', ['menunggu', 'diproses'])->count(),
             'locations' => Location::orderBy('name')->get(['id', 'name', 'building', 'floor']),
             'categories' => Category::where('unit_id', $asset->unit_id)->where('type', 'aset')->orderBy('name')->get(),
+            'org' => OrgUnit::choices(),
         ]);
     }
 
@@ -102,23 +105,25 @@ class AssetController extends Controller
     {
         $unit = $this->currentUnit($request->integer('unit_id'));
         $data = $this->validated($request, $unit);
-        $holder = $this->holderFromNik($request->input('holder_nik'));
-        if ($holder && $data['status'] === 'nonaktif') {
-            throw ValidationException::withMessages(['status' => 'Aset nonaktif tidak bisa langsung dipegang seseorang. Kosongkan pemegang atau pilih status lain.']);
+        [$person, $org] = $this->holderFromInput($request->only(['holder_type', 'holder_nik', 'holder_org_id']));
+        $held = $person || $org;
+        if ($held && $data['status'] === 'nonaktif') {
+            throw ValidationException::withMessages(['status' => 'Aset nonaktif tidak bisa langsung punya pemegang. Kosongkan pemegang atau pilih status lain.']);
         }
 
-        $asset = DB::transaction(function () use ($unit, $data, $holder, $request) {
+        $asset = DB::transaction(function () use ($unit, $data, $person, $org, $held, $request) {
             $asset = Asset::create(array_merge($data, [
                 'unit_id' => $unit->id,
-                'holder_id' => $holder?->id,
+                'holder_id' => $person?->id,
+                'holder_org_id' => $org?->id,
                 'location_id' => $request->integer('location_id') ?: null,
                 // Diisi pemegang saat didaftarkan -> otomatis "Digunakan".
-                'status' => $holder && $data['status'] === 'tersedia' ? 'digunakan' : $data['status'],
+                'status' => $held && $data['status'] === 'tersedia' ? 'digunakan' : $data['status'],
             ]));
             // Catatan awal agar riwayat pemegang dimulai sejak aset didaftarkan.
             $asset->movements()->create([
-                'type' => $holder ? 'serah_terima' : 'pindah',
-                'to_holder_id' => $holder?->id, 'to_holder_name' => $holder?->name,
+                'type' => $held ? 'serah_terima' : 'pindah',
+                'to_holder_id' => $person?->id, 'to_holder_org_id' => $org?->id, 'to_holder_name' => $person?->name ?? $org?->label(),
                 'to_location_id' => $asset->location_id, 'note' => 'Pencatatan awal aset.', 'user_id' => $request->user()->id,
             ]);
 
@@ -126,7 +131,7 @@ class AssetController extends Controller
         });
 
         $this->storePhotos($request, $asset);
-        Audit::log('asset.create', "Menambah aset {$asset->code} ({$asset->name}) di unit {$unit->name}.", $asset);
+        Audit::log('asset.create', "Menambah aset {$asset->code} ({$asset->name}) di regu {$unit->name}.", $asset);
 
         return redirect()->route('assets.show', $asset)->with('success', "Aset {$asset->code} ditambahkan.");
     }
@@ -142,11 +147,11 @@ class AssetController extends Controller
         }
         // Status harus selaras dengan pemegang: pemegang hanya berubah lewat mutasi agar riwayatnya tercatat.
         if (isset($data['status']) && $data['status'] !== $asset->status) {
-            if ($asset->holder_id && in_array($data['status'], ['tersedia', 'nonaktif'], true)) {
-                throw ValidationException::withMessages(['status' => 'Aset masih dipegang '.($asset->holder->name ?? 'seseorang').'. Pakai tombol "Tarik ke gudang" dulu, lalu ubah statusnya.']);
+            if ($asset->hasHolder() && in_array($data['status'], ['tersedia', 'nonaktif'], true)) {
+                throw ValidationException::withMessages(['status' => 'Aset masih dipegang '.($asset->holderName() ?? 'pemegang lain').'. Pakai tombol "Tarik ke Gudang" dulu, lalu ubah statusnya.']);
             }
-            if (! $asset->holder_id && $data['status'] === 'digunakan' && ! $asset->location_id) {
-                throw ValidationException::withMessages(['status' => 'Pakai tombol "Serah terima" untuk mencatat siapa pemakainya, atau isi lokasi aset bila dipakai bersama.']);
+            if (! $asset->hasHolder() && $data['status'] === 'digunakan' && ! $asset->location_id) {
+                throw ValidationException::withMessages(['status' => 'Pakai tombol "Alihkan" untuk mencatat pemakainya (karyawan, bidang, atau divisi), atau isi lokasi aset bila dipakai bersama.']);
             }
         }
         $asset->update($data);
@@ -216,14 +221,16 @@ class AssetController extends Controller
         $this->authorizeUnit($asset->unit_id);
         $data = $request->validate([
             'type' => ['required', Rule::in(array_keys(config('inventaris.movements')))],
-            'holder_nik' => ['nullable', 'string', 'max:50'],
+            'holder_type' => ['nullable', Rule::in(['orang', 'bidang', 'divisi'])],
+            'holder_nik' => ['nullable', 'string', 'max:80'],
+            'holder_org_id' => ['nullable', 'integer'],
             'location_id' => ['nullable', 'integer', Rule::exists('locations', 'id')],
             'due_back_at' => ['nullable', 'date', 'after_or_equal:today'],
             'note' => ['nullable', 'string', 'max:1000'],
         ], ['due_back_at.after_or_equal' => 'Batas pengembalian tidak boleh sebelum hari ini.']);
 
-        $holder = $this->holderFromNik($data['holder_nik'] ?? null);
-        $movement = $this->manager->move($asset, $request->user(), $data['type'], $data + ['holder_id' => $holder?->id]);
+        [$person, $org] = in_array($data['type'], ['serah_terima', 'pinjam'], true) ? $this->holderFromInput($data, true) : [null, null];
+        $movement = $this->manager->move($asset, $request->user(), $data['type'], ['holder_id' => $person?->id, 'holder_org_id' => $org?->id] + $data);
 
         return back()->with('success', "{$movement->typeLabel()} tercatat.");
     }
@@ -264,7 +271,7 @@ class AssetController extends Controller
         } else {
             $unit = $this->currentUnit($request->integer('unit'));
             $assets = $this->query($unit, $this->filters($request))->active()->with(['location', 'unit'])->orderBy('code')->limit(300)->get();
-            $title = 'Unit '.$unit->name;
+            $title = 'Regu '.$unit->name;
         }
 
         return view('assets.qr', ['assets' => $assets, 'title' => $title, 'halodek' => (bool) config('inventaris.halodek_url')]);
@@ -274,13 +281,13 @@ class AssetController extends Controller
     {
         $unit = $this->currentUnit($request->integer('unit'));
         $h = fn (string $t) => ['v' => $t, 's' => 'head'];
-        $rows = [array_map($h, ['Kode', 'Nama', 'Kategori', 'Merek', 'Model', 'No. Seri', 'Status', 'Kondisi', 'Pemegang', 'NIK', 'Lokasi',
+        $rows = [array_map($h, ['Kode', 'Nama', 'Kategori', 'Merek', 'Model', 'No. Seri', 'Status', 'Kondisi', 'Pemegang', 'NIK Pemegang', 'Lokasi',
             'Tgl Beli', 'Vendor', 'Garansi/Lisensi s.d.', 'Servis Berikutnya', 'Spesifikasi', 'Catatan'])];
 
-        foreach ($this->query($unit, $this->filters($request))->with(['category', 'holder', 'location'])->orderBy('code')->cursor() as $a) {
+        foreach ($this->query($unit, $this->filters($request))->with(['category', 'holder', 'holderOrg', 'location'])->orderBy('code')->cursor() as $a) {
             $rows[] = [
                 $a->code, $a->name, $a->category->name ?? '', (string) $a->brand, (string) $a->model, (string) $a->serial_number,
-                $a->statusLabel(), $a->conditionLabel(), $a->holder->name ?? '', $a->holder->nik ?? '', $a->location?->fullName() ?? '',
+                $a->statusLabel(), $a->conditionLabel(), $a->holderName() ?? '', $a->holder_id ? ($a->holder->nik ?? '') : '', $a->location?->fullName() ?? '',
                 $a->purchase_date?->format('Y-m-d') ?? '', (string) $a->vendor,
                 $a->due_date?->format('Y-m-d') ?? '', $a->next_service_at?->format('Y-m-d') ?? '', (string) $a->specs, (string) $a->notes,
             ];
@@ -300,9 +307,9 @@ class AssetController extends Controller
     public function template(): StreamedResponse
     {
         return Csv::download('template-impor-aset.csv', self::CSV_HEADER, [
-            ['Laptop & PC', 'AST-0147', 'Lenovo ThinkPad E14', 'Lenovo', 'ThinkPad E14 Gen 5', 'PF4ABC12', 'digunakan', 'baik', '00004', 'Ruang Finance',
+            ['Laptop & PC', 'AST-0147', 'Lenovo ThinkPad E14', 'Lenovo', 'ThinkPad E14 Gen 5', 'PF4ABC12', 'digunakan', 'baik', '00004', '', 'Ruang Finance',
                 '2026-01-15', 'PT Sumber Komputer', '2028-01-15', '2026-07-15', '6', 'i5-1335U, 16GB, SSD 512GB', ''],
-            ['AC', 'AC-012', 'AC Split 1 PK Ruang Rapat', 'Daikin', 'FTKC25', '', 'tersedia', 'baik', '', 'Ruang Rapat Utama',
+            ['AC', 'AC-012', 'AC Split 1 PK Ruang Rapat', 'Daikin', 'FTKC25', '', 'digunakan', 'baik', '', 'Bidang Umum & IT', 'Ruang Rapat Utama',
                 '2025-06-01', 'CV Sejuk', '', '2026-12-01', '3', '', 'Cuci AC tiap 3 bulan'],
         ]);
     }
@@ -324,7 +331,8 @@ class AssetController extends Controller
                 'service_interval_months' => ['nullable', 'integer', 'min:1', 'max:120'],
             ], [], ['code' => 'kode'])->validate();
 
-            $holder = $this->holderFromNik($d['holder_nik'] ?? null);
+            [$person, $org] = $this->holderFromInput(['holder_nik' => $d['holder_nik'] ?? null, 'holder_org' => $d['holder_org'] ?? null]);
+            $held = $person || $org;
             $category = Category::firstOrCreate(['unit_id' => $unit->id, 'type' => 'aset', 'name' => $v['category']]);
             $location = ! empty($d['location']) ? Location::firstOrCreate(['name' => mb_substr(trim($d['location']), 0, 120)]) : null;
             $opt = fn ($k, $len = 255) => ($x = trim((string) ($d[$k] ?? ''))) === '' ? null : mb_substr($x, 0, $len);
@@ -332,8 +340,8 @@ class AssetController extends Controller
             $asset = Asset::create([
                 'unit_id' => $unit->id, 'category_id' => $category->id, 'code' => $v['code'], 'name' => $v['name'],
                 'brand' => $opt('brand', 80), 'model' => $opt('model', 120), 'serial_number' => $opt('serial_number', 120),
-                'status' => $holder && $v['status'] === 'tersedia' ? 'digunakan' : $v['status'], 'condition' => $v['condition'],
-                'holder_id' => $holder?->id, 'location_id' => $location?->id,
+                'status' => $held && $v['status'] === 'tersedia' ? 'digunakan' : $v['status'], 'condition' => $v['condition'],
+                'holder_id' => $person?->id, 'holder_org_id' => $org?->id, 'location_id' => $location?->id,
                 'purchase_date' => $this->parseDate($d['purchase_date'] ?? null, 'purchase_date'),
                 'vendor' => $opt('vendor', 120),
                 'due_date' => $this->parseDate($d['due_date'] ?? null, 'due_date'),
@@ -342,12 +350,13 @@ class AssetController extends Controller
                 'specs' => $opt('specs', 3000), 'notes' => $opt('notes', 3000),
             ]);
             $asset->movements()->create([
-                'type' => $holder ? 'serah_terima' : 'pindah', 'to_holder_id' => $holder?->id, 'to_holder_name' => $holder?->name,
+                'type' => $held ? 'serah_terima' : 'pindah', 'to_holder_id' => $person?->id, 'to_holder_org_id' => $org?->id,
+                'to_holder_name' => $person?->name ?? $org?->label(),
                 'to_location_id' => $asset->location_id, 'note' => 'Impor CSV.', 'user_id' => $request->user()->id,
             ]);
         });
 
-        Audit::log('asset.import', "Impor aset unit {$unit->name}: {$result['ok']} berhasil.");
+        Audit::log('asset.import', "Impor aset regu {$unit->name}: {$result['ok']} berhasil.");
         $back = redirect()->route('assets.index', ['unit' => $unit->id]);
         if ($result['fatal']) {
             return $back->with('error', $result['fatal']);
@@ -381,13 +390,14 @@ class AssetController extends Controller
             ->when($f['perhatian'] === 'servis', fn ($q) => $q->serviceDue($days))
             ->when($f['perhatian'] === 'garansi', fn ($q) => $q->dueSoon($days))
             ->when($f['perhatian'] === 'rusak', fn ($q) => $q->where('condition', '!=', 'baik'))
-            ->when($f['perhatian'] === 'pemegang', fn ($q) => $q->whereHas('holder', fn ($h) => $h->where('is_active', false)))
+            ->when($f['perhatian'] === 'pemegang', fn ($q) => $q->inactiveHolder())
             ->when($f['q'] !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('code', 'like', "%{$f['q']}%")
                 ->orWhere('name', 'like', "%{$f['q']}%")
                 ->orWhere('serial_number', 'like', "%{$f['q']}%")
                 ->orWhere('brand', 'like', "%{$f['q']}%")
                 ->orWhereHas('holder', fn ($h) => $h->where('name', 'like', "%{$f['q']}%")->orWhere('nik', 'like', "%{$f['q']}%"))
+                ->orWhereHas('holderOrg', fn ($o) => $o->where('name', 'like', "%{$f['q']}%"))
                 ->orWhereHas('location', fn ($l) => $l->where('name', 'like', "%{$f['q']}%"))));
     }
 
@@ -412,13 +422,15 @@ class AssetController extends Controller
             'service_interval_months' => ['nullable', 'integer', 'min:1', 'max:120'],
             'notes' => ['nullable', 'string', 'max:3000'],
             'location_id' => ['nullable', 'integer', Rule::exists('locations', 'id')],
-            'holder_nik' => ['nullable', 'string', 'max:50'],
+            'holder_type' => ['nullable', Rule::in(['orang', 'bidang', 'divisi'])],
+            'holder_nik' => ['nullable', 'string', 'max:80'],
+            'holder_org_id' => ['nullable', 'integer'],
             'photos' => ['nullable', 'array', 'max:'.config('inventaris.photos.max_files')],
             'photos.*' => ['image', 'mimes:'.implode(',', config('inventaris.photos.mimes')), 'max:'.config('inventaris.photos.max_kb')],
         ], [
-            'code.unique' => 'Kode aset sudah dipakai di unit ini.',
+            'code.unique' => 'Kode aset sudah dipakai di regu ini.',
             'category_id.required' => 'Pilih kategori aset.',
-            'category_id.exists' => 'Kategori tidak sesuai dengan unit.',
+            'category_id.exists' => 'Kategori tidak sesuai dengan regu.',
             'purchase_date.before_or_equal' => 'Tanggal beli tidak boleh di masa depan.',
         ]);
 
@@ -427,7 +439,7 @@ class AssetController extends Controller
             throw ValidationException::withMessages(['status' => 'Gunakan tombol Pinjamkan agar tanggal kembali tercatat.']);
         }
 
-        unset($data['location_id'], $data['holder_nik'], $data['photos']);
+        unset($data['location_id'], $data['holder_type'], $data['holder_nik'], $data['holder_org_id'], $data['photos']);
 
         return $data;
     }
@@ -445,6 +457,59 @@ class AssetController extends Controller
             'result' => ['nullable', 'string', 'max:2000'],
             'report_number' => ['nullable', 'string', 'max:40'],
         ], ['completed_at.before_or_equal' => 'Tanggal selesai tidak boleh di masa depan.']);
+    }
+
+    /**
+     * Pemegang dari isian form / CSV: [karyawan, null], [null, bidang/divisi], atau [null, null].
+     *  - Form: holder_type = orang | bidang | divisi, dengan holder_nik atau holder_org_id.
+     *  - CSV : holder_nik, atau holder_org berisi "Bidang Umum & IT" / "Divisi Keuangan".
+     *
+     * @return array{0: ?User, 1: ?OrgUnit}
+     */
+    private function holderFromInput(array $d, bool $required = false): array
+    {
+        $type = $d['holder_type'] ?? null;
+        $nik = trim((string) ($d['holder_nik'] ?? ''));
+        $orgId = (int) ($d['holder_org_id'] ?? 0);
+        $orgText = trim((string) ($d['holder_org'] ?? ''));
+        $type ??= $nik !== '' ? 'orang' : ($orgId || $orgText !== '' ? 'org' : null);
+
+        if ($type === 'orang' || ($type === null && $nik !== '')) {
+            if ($nik === '' && $required) {
+                throw ValidationException::withMessages(['holder_nik' => 'Isi NIK atau nama karyawan.']);
+            }
+
+            return [$this->holderFromNik($nik), null];
+        }
+        if ($type === 'bidang' || $type === 'divisi' || $type === 'org') {
+            $org = $orgId ? OrgUnit::find($orgId) : ($orgText !== '' ? $this->orgFromText($orgText) : null);
+            if (! $org || ($type !== 'org' && $org->type !== $type)) {
+                $what = $type === 'divisi' ? 'divisi' : ($type === 'bidang' ? 'bidang' : 'bidang/divisi');
+                throw ValidationException::withMessages(['holder_org_id' => $orgText !== '' ? "\"{$orgText}\" tidak ditemukan. Tulis \"Bidang <nama>\" atau \"Divisi <nama>\" sesuai HaloDek." : "Pilih {$what} pemegang."]);
+            }
+            if (! $org->is_active) {
+                throw ValidationException::withMessages(['holder_org_id' => "{$org->label()} sudah tidak aktif di HaloDek, tidak bisa menerima aset."]);
+            }
+
+            return [null, $org];
+        }
+        if ($required) {
+            throw ValidationException::withMessages(['holder_type' => 'Pilih penerima: karyawan, bidang, atau divisi.']);
+        }
+
+        return [null, null];
+    }
+
+    /** "Bidang Umum & IT" / "Divisi Keuangan" / "Umum & IT" (dicari di bidang dulu, lalu divisi). */
+    private function orgFromText(string $text): ?OrgUnit
+    {
+        $type = null;
+        if (preg_match('/^(bidang|divisi)\s*[:\-]?\s+(.+)$/iu', $text, $m)) {
+            [$type, $text] = [mb_strtolower($m[1]), trim($m[2])];
+        }
+        $find = fn (string $t) => OrgUnit::where('type', $t)->whereRaw('LOWER(name) = ?', [mb_strtolower($text)])->orderByDesc('is_active')->first();
+
+        return $type ? $find($type) : ($find(OrgUnit::BIDANG) ?? $find(OrgUnit::DIVISI));
     }
 
     private function holderFromNik(?string $nik): ?User

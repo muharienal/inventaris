@@ -85,7 +85,7 @@ class InventarisTest extends TestCase
 
         $this->actingAs($staf)->patch(route('assets.update', $asset), array_merge($asset->only(['category_id', 'code', 'status', 'condition']), ['name' => 'Laptop Baru']))->assertSessionHasNoErrors();
         $this->assertSame('Laptop Baru', $asset->fresh()->name);
-        $this->actingAs($staf)->get(route('assets.show', $asset))->assertSee('Serah terima')->assertDontSee('Hapus Aset');
+        $this->actingAs($staf)->get(route('assets.show', $asset))->assertSee('Alihkan')->assertDontSee('Hapus Aset');
         $this->actingAs($staf)->get(route('assets.index'))->assertSee('Tambah Aset')->assertDontSee('Impor CSV');
         $this->actingAs($staf)->get(route('categories.index'))->assertOk()->assertDontSee('data-modal-open="category-modal"', false);
 
@@ -104,7 +104,7 @@ class InventarisTest extends TestCase
             $this->actingAs($mgr)->get(route($r))->assertOk();
         }
         $this->actingAs($mgr)->get(route('assets.index', ['unit' => $this->unitIt->id]))->assertSee('AST-0001')->assertDontSee('Tambah Aset')->assertSee('Mode lihat');
-        $this->actingAs($mgr)->get(route('assets.show', $asset))->assertOk()->assertSee('Cetak QR')->assertDontSee('Serah terima')->assertDontSee('Hapus Aset')->assertDontSee('id="asset-modal"', false);
+        $this->actingAs($mgr)->get(route('assets.show', $asset))->assertOk()->assertSee('Cetak QR')->assertDontSee('Alihkan')->assertDontSee('Hapus Aset')->assertDontSee('id="asset-modal"', false);
         $this->actingAs($mgr)->get(route('assets.export', ['unit' => $this->unitIt->id]))->assertOk();
 
         // Semua aksi ubah ditolak.
@@ -626,18 +626,19 @@ class InventarisTest extends TestCase
         $this->emp->update(['is_active' => false]);
         $this->actingAs($this->it)->get(route('dashboard'))->assertSee('yang sudah nonaktif');
         $this->actingAs($this->it)->get(route('assets.index', ['perhatian' => 'pemegang']))->assertSee($asset->code);
-        $this->actingAs($this->it)->get(route('assets.show', $asset))->assertSee('sudah nonaktif. Tarik aset ini');
+        $this->actingAs($this->it)->get(route('assets.show', $asset))->assertSee('sudah nonaktif. Alihkan aset ini');
         // Tarik ke gudang tetap bisa.
         $this->actingAs($this->it)->post(route('assets.move', $asset), ['type' => 'tarik'])->assertSessionHasNoErrors();
         $this->assertNull($asset->fresh()->holder_id);
     }
 
-    public function test_people_search_returns_few_matches(): void
+    public function test_holder_and_access_pickers_are_dropdowns_from_database(): void
     {
-        $this->actingAs($this->it)->getJson(route('people.search', ['q' => 'a']))->assertExactJson([]);
-        $rows = $this->actingAs($this->it)->getJson(route('people.search', ['q' => $this->emp->nik]))->assertOk()->json();
-        $this->assertSame($this->emp->nik.' - '.$this->emp->name, $rows[0]['value']);
-        $this->actingAs($this->it)->get(route('assets.index'))->assertSee('data-people-src', false);
+        $this->emp2->update(['is_active' => false]);
+        $this->actingAs($this->it)->get(route('assets.index'))->assertOk()
+            ->assertSee('<select class="select " name="holder_nik" id="asset-holder-nik">', false)
+            ->assertSee('value="'.$this->emp->nik.'"', false)->assertDontSee('value="'.$this->emp2->nik.'"', false)
+            ->assertDontSee('data-people-src', false);
     }
 
     public function test_api_asset_has_public_check_url(): void

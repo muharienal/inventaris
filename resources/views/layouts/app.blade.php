@@ -48,7 +48,6 @@
 
     </nav>
 
-    <div class="side-foot">{{ config('inventaris.company') }}</div>
 </aside>
 
 {{-- ===================== AREA KERJA ===================== --}}
@@ -64,6 +63,9 @@
             </form>
 
         <div class="bar-actions">
+            <button type="button" class="app-chip" data-modal-open="pwa-modal" data-pwa-chip title="Pasang Inventaris di HP atau laptop">
+                <x-icon name="download" :size="15" /><span class="app-chip-t">Pasang Aplikasi</span>
+            </button>
             @if ($canManage)
                 @unless ($on('assets.index'))
                     <a href="{{ route('assets.index', ['tambah' => 1]) }}" class="btn btn-cta btn-sm"><x-icon name="plus" :size="16" /> <span class="hide-xs">Tambah Aset</span></a>
@@ -105,6 +107,12 @@
     <footer class="footer">IT {{ config('inventaris.company') }} © {{ date('Y') }}</footer>
 </div>
 
+@php
+    // Ajakan pasang aplikasi (PWA): sekali tiap login; browser sendiri yang memastikan belum terpasang.
+    $showPwaPrompt = ! session()->has('pwa_prompt_seen') && ! auth()->user()->must_change_password;
+    if ($showPwaPrompt) { session()->put('pwa_prompt_seen', true); }
+@endphp
+<x-pwa-install :auto="$showPwaPrompt" />
 @stack('modals')
 
 @if (old('_modal'))

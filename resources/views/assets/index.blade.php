@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Aset')
-@section('subtitle', 'Barang tahan lama milik unit '.$unit->name)
+@section('subtitle', 'Perangkat, peralatan, kendaraan, dan fasilitas yang dikelola tiap regu di Bidang Umum & IT.')
 
 @section('content')
 @php
@@ -60,11 +60,12 @@
                 <tr>
                     <td style="max-width:300px"><a class="mono strong" href="{{ route('assets.show', $a) }}">{{ $a->code }}</a>
                         <div class="truncate text-sm">{{ $a->name }}</div>
-                        @if ($a->brand || $a->serial_number)<div class="text-xs muted truncate">{{ trim($a->brand.' '.$a->model) }}{{ $a->serial_number ? ' · SN '.$a->serial_number : '' }}</div>@endif</td>
+                        @php $bm = $a->brandModel(); $sub = collect([$bm && mb_strtolower($bm) !== mb_strtolower($a->name) ? $bm : null, $a->serial_number ? 'SN '.$a->serial_number : null])->filter()->implode(' · '); @endphp
+                        @if ($sub !== '')<div class="text-xs muted truncate">{{ $sub }}</div>@endif</td>
                     <td class="text-sm">{{ $a->category->name }}</td>
                     <td><x-badge :tone="$a->statusTone()">{{ $a->statusLabel() }}</x-badge>
                         @if ($a->condition !== 'baik')<div class="mt-1"><x-badge :tone="$a->conditionTone()" plain>{{ $a->conditionLabel() }}</x-badge></div>@endif</td>
-                    <td class="text-sm">{{ $a->holder->name ?? '-' }}@if ($a->holder && ! $a->holder->is_active)<div class="text-xs danger-text">Nonaktif</div>@endif</td>
+                    <td class="text-sm">{{ $a->holderName() ?? '-' }}@if ($a->holderInactive())<div class="text-xs danger-text">Nonaktif</div>@endif</td>
                     <td class="text-sm">{{ $a->location->name ?? '-' }}</td>
                     <td class="text-sm nowrap">
                         @if ($a->next_service_at)<div class="{{ $a->isServiceDue() ? ($a->next_service_at->isPast() ? 'danger-text strong' : 'warn-text') : 'muted' }}">Servis {{ $a->next_service_at->translatedFormat('d M Y') }}</div>@endif
@@ -88,13 +89,14 @@
         <span hidden data-open-on-load="asset-modal"></span>
     @endif
     @lead<x-import-modal :action="route('assets.import')" :template="route('assets.template')" title="Impor Aset dari CSV"
-                    columns="category, code, name, brand, model, serial_number, status, condition, holder_nik, location, purchase_date, vendor, due_date, next_service_at, service_interval_months, specs, notes" />@endlead
+                    columns="category, code, name, brand, model, serial_number, status, condition, holder_nik, holder_org, location, purchase_date, vendor, due_date, next_service_at, service_interval_months, specs, notes"
+                    note="Pemegang: isi holder_nik untuk karyawan, atau holder_org untuk bidang/divisi (mis. Bidang Umum & IT, Divisi Keuangan)." />@endlead
 @endmanage
 @endpush
 
 @push('scripts')
 <script nonce="{{ $cspNonce ?? '' }}">
-    // Import modal mengirim unit aktif; "?tambah=1" (dari tombol di header) langsung membuka form tambah.
+    // Import modal mengirim regu aktif; "?tambah=1" (dari tombol di header) langsung membuka form tambah.
     (function () {
         var f = document.querySelector('#import-modal form');
         if (f && !f.querySelector('[name=unit_id]')) { var i = document.createElement('input'); i.type = 'hidden'; i.name = 'unit_id'; i.value = '{{ $unit->id }}'; f.appendChild(i); }

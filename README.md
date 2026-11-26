@@ -1,28 +1,63 @@
 # Inventaris Umum & IT
 
-Aplikasi pengelolaan aset dan barang habis pakai PT Petrokopindo Cipta Selaras untuk unit **IT**, **Sarana dan Prasarana**, **Kesekretariatan**, dan **Keamanan**. Aplikasi ini berdiri sendiri, terpisah dari **HaloDek** (aplikasi tiket aduan). Keduanya bertukar data lewat API. Dibangun dengan Laravel 10 (PHP + Blade), tanpa npm / Node / CDN.
+Aplikasi pengelolaan aset dan barang habis pakai PT Petrokopindo Cipta Selaras untuk regu **IT**, **Sarana dan Prasarana**, **Kesekretariatan**, dan **Keamanan** (struktur: Divisi > Bidang > Regu > Karyawan, mengikuti HaloDek). Aplikasi ini berdiri sendiri, terpisah dari **HaloDek** (aplikasi tiket aduan). Keduanya bertukar data lewat API. Dibangun dengan Laravel 10 (PHP + Blade), tanpa npm / Node / CDN.
 
 ## Fitur
 
 - **Aset:** kode, merek/model, nomor seri, spesifikasi, foto (maks. 6), tanggal beli, vendor, garansi/lisensi, status, dan kondisi.
-- **Riwayat & mutasi:** serah terima, pindah lokasi, pinjam dengan tanggal kembali (keterlambatan ditandai), kembalikan, dan tarik ke gudang. Semua tercatat di riwayat aset.
+- **Pemegang aset:** satu karyawan, satu bidang, atau satu divisi. Daftar bidang & divisi mengikuti struktur organisasi di HaloDek (ikut tersinkron bersama data pegawai).
+- **Riwayat & mutasi:** alihkan (ke karyawan/bidang/divisi lain), pinjamkan dengan tanggal kembali (keterlambatan ditandai), kembalikan, pindah lokasi, dan tarik ke gudang. Semua tercatat di riwayat aset.
 - **Servis & perawatan:** jadwal servis, biaya, vendor, dan hasil. Servis berikutnya dihitung otomatis dari interval. Aset yang sedang diperbaiki (servis manual) berstatus *Perbaikan*.
 - **Riwayat perbaikan otomatis dari HaloDek:** laporan kendala di HaloDek yang terkait aset langsung tercatat sebagai *Perbaikan*. Saat petugas mulai menangani: "Sedang ditangani" (dengan nama petugas). Saat selesai: tanggal selesai dan catatan penyelesaian menjadi hasil perbaikan. Bila laporan dibatalkan/ditolak setelah ditangani: "Batal". Catatan ini tidak diubah manual di Inventaris; tidak perlu input ulang.
 - **Stok habis pakai:** stok masuk, keluar, dan penyesuaian, dengan peringatan stok minimum. Stok keluar mencatat penerimanya (mis. "Andi (Keuangan)"), dan beranda menampilkan stok keluar terbaru.
 - **Pemegang nonaktif:** aset yang masih tercatat dipegang pegawai yang sudah nonaktif muncul di Beranda (Perlu Perhatian), filter Aset "Pemegang sudah nonaktif", dan peringatan di detail aset.
-- **Lokasi** dipakai bersama semua unit: Kepala Regu boleh menambah; mengubah dan menghapus hanya Superadmin.
+- **Lokasi** dipakai bersama semua regu: Kepala Regu boleh menambah; mengubah dan menghapus hanya Superadmin.
 - **QR stiker:** cetak dari daftar atau detail aset. Memindai QR membuka halaman **cek aset** di Inventaris tanpa login: tanda "Aset terdaftar" (atau "sudah tidak aktif"), kode, merek/model, nomor seri, kategori, lokasi, pemegang, status, kondisi, dan servis terakhir, untuk dicocokkan dengan barang fisiknya. Ada tombol **Laporkan kendala** ke HaloDek. Alamatnya memakai `QR_URL` (atau `APP_URL` bila kosong) dan token acak per aset yang **tersimpan di database**, jadi stiker tetap berlaku walau `APP_KEY` diganti. **Sebelum mencetak massal, isi `QR_URL` dengan alamat tetap** (IP tetap atau nama domain kantor, bukan nama laptop/komputer): bila alamat di stiker berubah, stiker yang sudah ditempel tidak bisa dibuka. Halaman cetak memberi peringatan bila alamatnya `localhost` atau nama komputer. Stiker lama (mengarah ke HaloDek) tetap berfungsi; cetak ulang agar memakai halaman cek aset.
 - **Laporan kendala dari HaloDek** muncul di riwayat aset, lengkap dengan statusnya.
 - **Lainnya:** impor CSV, ekspor Excel, master kategori dan lokasi, log aktivitas, serta tampilan HP (320 px) sampai layar lebar.
+
+## Pasang sebagai aplikasi (HP & laptop)
+
+Inventaris bisa dipasang seperti aplikasi: ikonnya ada di layar utama HP Android/iPhone atau di desktop/menu Start laptop, dan terbuka di jendela sendiri tanpa kolom alamat.
+- Setiap kali login, muncul ajakan **Pasang sebagai aplikasi** selama aplikasi belum dipasang di perangkat itu. Bila sudah dipasang (atau pengguna menekan **Sudah Terpasang**), ajakan otomatis tidak muncul lagi.
+- Tombol **Pasang Aplikasi** di header selalu tersedia (kecuali saat sudah dibuka sebagai aplikasi).
+- Browser yang mendukung pemasangan langsung menampilkan tombol **Pasang Sekarang**. Selain itu muncul langkah singkat sesuai perangkat (Chrome Android, Safari iPhone, Chrome/Edge laptop).
+
+**Penting, HTTPS:** pemasangan penuh (tombol Pasang Sekarang, ikon aplikasi asli, halaman offline) hanya diizinkan browser lewat **HTTPS** atau `localhost`. Lewat alamat `http://nama-komputer:port` di jaringan kantor, browser hanya bisa membuat **pintasan** (Android: "Tambahkan ke layar utama"; Chrome laptop: "Buat pintasan" + "Buka sebagai jendela"), yang tetap membuka aplikasi tanpa mengetik alamat. Agar terpasang penuh di semua HP, aktifkan HTTPS (lihat bagian berikut).
+
+### Mengaktifkan HTTPS (agar "Pasang Aplikasi" cukup sekali klik)
+
+Browser (Chrome, Edge, Safari) hanya mengizinkan pemasangan sekali klik lewat HTTPS. Ini aturan browser, tidak bisa diakali dari aplikasi. Langkah untuk Laragon di jaringan kantor (cukup sekali, berlaku untuk HaloDek dan Inventaris):
+
+1. **Buat sertifikat.** Unduh `mkcert-v1.4.4-windows-amd64.exe` dari github.com/FiloSottile/mkcert/releases, ganti nama menjadi `mkcert.exe`, taruh di `C:\laragon\etc\ssl\`. Buka **CMD sebagai Administrator** di folder itu, lalu jalankan (ganti `192.168.1.10` dengan IP laptop server; sebaiknya IP-nya dibuat tetap):
+   ```
+   mkcert -install
+   mkcert -cert-file pcs.pem -key-file pcs-key.pem laptop-3rt83m6j 192.168.1.10 localhost 127.0.0.1
+   type "%LOCALAPPDATA%\mkcert\rootCA.pem" >> C:\laragon\etc\ssl\cacert.pem
+   ```
+   Baris ketiga membuat PHP mempercayai sertifikat ini, agar HaloDek dan Inventaris tetap bisa saling terhubung lewat https.
+2. **Aktifkan di Apache.** Laragon > Apache > SSL > **Enabled**. Salin `deploy/laragon-https.conf.example` ke `C:\laragon\etc\apache2\sites-enabled\pcs-https.conf` (sesuaikan folder bila bukan `D:\halodek` / `D:\inventaris`), lalu **Reload** Apache. Izinkan port 8443 dan 8444 di Windows Firewall.
+3. **Ubah .env lalu `php artisan optimize:clear`** di kedua aplikasi:
+   - HaloDek: `APP_URL=https://192.168.1.10:8443`, `INVENTARIS_URL=https://192.168.1.10:8444`
+   - Inventaris: `APP_URL=https://192.168.1.10:8444`, `QR_URL=https://192.168.1.10:8444`, `HALODEK_URL=https://192.168.1.10:8443`
+   Setelah itu cetak ulang stiker QR.
+4. **Percayakan sertifikat di tiap perangkat (sekali saja).** Salin `rootCA.pem` (dari `%LOCALAPPDATA%\mkcert\`):
+   - HP Android: Setelan > Keamanan > Enkripsi & kredensial > Instal sertifikat > **Sertifikat CA**, pilih `rootCA.pem`.
+   - iPhone: buka berkasnya, pasang profilnya, lalu Setelan > Umum > Info > Setelan Kepercayaan Sertifikat > aktifkan.
+   - Laptop lain: klik dua kali berkas (ubah nama jadi `rootCA.crt`) > Install Certificate > Local Machine > **Trusted Root Certification Authorities**.
+
+Setelah itu buka `https://192.168.1.10:8443`: tombol **Pasang Sekarang** muncul, satu klik langsung terpasang. Di laptop, aplikasinya langsung terbuka di jendela sendiri. Di HP, ikonnya langsung ada di layar utama.
+
+Tanpa langkah 4 per perangkat: pakai domain kantor (mis. `halodek.perusahaan.co.id`) dengan sertifikat resmi (mis. Let's Encrypt). Sertifikat resmi langsung dipercaya semua HP tanpa memasang apa pun.
 
 ## Peran
 
 | Peran | Untuk | Kemampuan |
 |---|---|---|
-| Superadmin | Admin aplikasi | Semua unit, akun, log aktivitas |
-| Manajer | Manajer Umum & IT | Melihat semua unit, ekspor, cetak QR, log aktivitas. **Tidak bisa mengubah data** |
-| Kepala Regu | Kepala regu unit | Semua pekerjaan unitnya, termasuk kategori, lokasi, hapus, dan impor CSV |
-| Staf | Staf unit | Pekerjaan harian: tambah/ubah aset, foto, mutasi, servis, stok masuk/keluar |
+| Superadmin | Admin aplikasi | Semua regu, akun, log aktivitas |
+| Manajer | Manajer Umum & IT | Melihat semua regu, ekspor, cetak QR, log aktivitas. **Tidak bisa mengubah data** |
+| Kepala Regu | Kepala regu | Semua pekerjaan regunya, termasuk kategori, lokasi, hapus, dan impor CSV |
+| Staf | Staf regu | Pekerjaan harian: tambah/ubah aset, foto, mutasi, servis, stok masuk/keluar |
 | Karyawan | Pemegang aset | **Tidak punya akun.** Datanya diambil dari HaloDek |
 
 Peran ini sama dengan HaloDek. Semua yang punya akun masuk dengan **NIK + password**. Akun di Inventaris terpisah dari HaloDek dan tidak memakai email.
@@ -34,11 +69,22 @@ Data diri **semua orang** (NIK, nama, divisi, bidang, jabatan, No. WA) hanya dii
 - saat NIK pemegang yang diketik belum dikenal;
 - lewat tombol **Ambil sekarang** di menu Pengguna, atau `php artisan inventaris:sinkron-karyawan`.
 
+Struktur **Divisi -> Bidang** ikut diambil sekaligus (`GET {HALODEK_URL}/api/v1/organization`) dan menjadi pilihan pemegang aset. Bidang/divisi yang dihapus di HaloDek dinonaktifkan di sini (asetnya muncul di **Perlu perhatian** untuk dialihkan). HaloDek versi lama atau mode mandiri: struktur dibentuk dari isian divisi/bidang pegawai.
+
+### Pemegang & mutasi aset
+
+Pemegang aset bisa **satu karyawan**, **satu bidang**, atau **satu divisi**. Semua perubahan lewat tombol di halaman aset agar tercatat di riwayat:
+- **Alihkan**: pindahkan pemegang ke karyawan, bidang, atau divisi lain (status Digunakan).
+- **Pinjamkan**: ke karyawan, bidang, atau divisi sampai tanggal tertentu; **Terima Kembali** mengembalikan ke pemegang sebelumnya.
+- **Pindah Lokasi** dan **Tarik ke Gudang** (pemegang dikosongkan, status Tersedia).
+
+Impor CSV: kolom `holder_nik` untuk karyawan, atau `holder_org` berisi mis. `Bidang Umum & IT` / `Divisi Keuangan`.
+
 Di menu **Pengguna**, Inventaris hanya mengatur **siapa yang bisa masuk** dan perannya:
-- **Beri akses**: pilih orang dari daftar HaloDek (ketik NIK atau nama), pilih peran dan unit. Password sementara ditampilkan sekali. Orang yang belum ada di daftar ditambahkan dulu di HaloDek.
-- **Ubah akses**: hanya peran, unit, dan status aktif.
+- **Beri akses**: pilih orang dari daftar HaloDek (ketik NIK atau nama), pilih peran dan regu. Password sementara ditampilkan sekali. Orang yang belum ada di daftar ditambahkan dulu di HaloDek.
+- **Ubah akses**: hanya peran, regu, dan status aktif.
 - **Cabut akses**: orangnya kembali menjadi karyawan biasa; data diri, aset yang dipegang, dan riwayatnya tetap.
-- **Impor akses** (CSV `nik, role, unit`) untuk memberi akses banyak orang sekaligus.
+- **Impor akses** (CSV `nik, role, regu`; kolom lama `unit` tetap diterima) untuk memberi akses banyak orang sekaligus.
 
 Orang yang nonaktif atau dihapus di HaloDek ikut dinonaktifkan di sini (kecuali Superadmin). Bila `HALODEK_URL` belum diisi, Inventaris berjalan mandiri dan akun boleh dibuat manual.
 
@@ -85,7 +131,7 @@ Untuk HaloDek versi lama yang masih punya menu Inventaris:
    php artisan inventaris:impor-halodek
    ```
    Yang dipindah: lokasi, kategori, barang (ID dipertahankan agar laporan lama di HaloDek tetap tersambung), dan pemegang barang. Admin regu ikut pindah dengan hash password yang sama. Tambahkan `--semua-pengguna` untuk menyalin semua pengguna HaloDek. Perintah ini aman diulang: data yang sudah ada dilewati, dan data HaloDek tidak diubah.
-4. Setelah itu, atur Kepala Regu dan Staf tiap unit di menu **Pengguna**.
+4. Setelah itu, atur Kepala Regu dan Staf tiap regu di menu **Pengguna**.
 
 ## API untuk HaloDek
 
@@ -94,7 +140,7 @@ Semua rute memakai header `Authorization: Bearer <INVENTARIS_API_TOKEN>`. Server
 | Metode | Rute | Kegunaan |
 |---|---|---|
 | GET | `/api/v1/ping` | Cek koneksi |
-| GET | `/api/v1/units` | Daftar unit |
+| GET | `/api/v1/units` | Daftar regu (kode regu = slug regu di HaloDek) |
 | GET | `/api/v1/locations` | Daftar lokasi |
 | GET | `/api/v1/assets?unit=it&holder_nik=..&location_id=..&include_id=..` | Aset aktif yang boleh dilaporkan |
 | GET | `/api/v1/assets/{id}` | Detail satu aset, termasuk `check_url` (halaman cek aset publik) |

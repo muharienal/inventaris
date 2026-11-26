@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AssetMovement extends Model
 {
     protected $fillable = [
-        'asset_id', 'type', 'from_holder_id', 'to_holder_id', 'from_holder_name', 'to_holder_name',
+        'asset_id', 'type', 'from_holder_id', 'to_holder_id', 'from_holder_org_id', 'to_holder_org_id', 'from_holder_name', 'to_holder_name',
         'from_location_id', 'to_location_id', 'due_back_at', 'returned_at', 'note', 'user_id',
     ];
 

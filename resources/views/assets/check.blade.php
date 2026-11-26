@@ -1,7 +1,7 @@
 @php
     $active = $asset->isActive();
     $photo = $asset->photos->first();
-    $brand = trim(($asset->brand ?? '').' '.($asset->model ?? ''));
+    $brand = (string) $asset->brandModel();
     $report = $active ? $asset->haloDekUrl() : null;
 @endphp
 <!DOCTYPE html>
@@ -52,9 +52,9 @@
             <div><dt>Merek / model</dt><dd>{{ $brand !== '' ? $brand : '-' }}</dd></div>
             <div><dt>Nomor seri</dt><dd class="mono">{{ $asset->serial_number ?: '-' }}</dd></div>
             <div><dt>Kategori</dt><dd>{{ $asset->category->name ?? '-' }}</dd></div>
-            <div><dt>Unit pengelola</dt><dd><x-unit-chip :unit="$asset->unit" /></dd></div>
+            <div><dt>Regu pengelola</dt><dd><x-unit-chip :unit="$asset->unit" /></dd></div>
             <div><dt>Lokasi</dt><dd>{{ $asset->location?->fullName() ?? '-' }}</dd></div>
-            <div><dt>Pemegang</dt><dd>{{ $asset->holder?->name ?? '-' }}</dd></div>
+            <div><dt>Pemegang</dt><dd>{{ $asset->holderName() ?? '-' }}</dd></div>
             <div><dt>Status</dt><dd><x-badge :tone="$asset->statusTone()">{{ $asset->statusLabel() }}</x-badge></dd></div>
             <div><dt>Kondisi</dt><dd><x-badge :tone="$asset->conditionTone()" plain>{{ $asset->conditionLabel() }}</x-badge></dd></div>
             <div><dt>Terdaftar sejak</dt><dd>{{ $asset->created_at?->translatedFormat('d M Y') ?? '-' }}</dd></div>

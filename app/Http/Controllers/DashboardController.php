@@ -37,8 +37,8 @@ class DashboardController extends Controller
         $attention = [
             'overdueLoans' => AssetMovement::with(['asset', 'toHolder'])->where('type', 'pinjam')->whereNull('returned_at')
                 ->whereDate('due_back_at', '<', today())->whereHas('asset', fn ($q) => $q->whereIn('unit_id', $unitIds))->orderBy('due_back_at')->take(8)->get(),
-            // Pegawai sudah nonaktif (keluar/pindah) tetapi masih tercatat memegang aset.
-            'inactiveHolders' => $assets()->whereHas('holder', fn ($q) => $q->where('is_active', false))->with('holder')->orderBy('code')->take(8)->get(),
+            // Pemegang sudah nonaktif (pegawai keluar, bidang/divisi dihapus di HaloDek) tetapi masih tercatat memegang aset.
+            'inactiveHolders' => $assets()->inactiveHolder()->with(['holder', 'holderOrg'])->orderBy('code')->take(8)->get(),
             'service' => $assets()->serviceDue($days)->with('location')->orderBy('next_service_at')->take(8)->get(),
             'expiring' => $assets()->dueSoon($days)->with('location')->orderBy('due_date')->take(8)->get(),
             // "+ 0.0": stock & min_stock unsigned; selisih negatif membuat MySQL error tanpa ini.

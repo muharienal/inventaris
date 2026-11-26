@@ -1,0 +1,65 @@
+{
+  "id": "./",
+  "name": "Inventaris Umum & IT",
+  "short_name": "Inventaris",
+  "description": "Pengelolaan aset dan barang habis pakai PT Petrokopindo Cipta Selaras",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B5E4E",
+  "theme_color": "#0B5E4E",
+  "icons": [
+    {
+      "src": "images/inventaris-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/inventaris-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/inventaris-icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "images/inventaris-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daftar Aset",
+      "short_name": "Aset",
+      "url": "aset",
+      "icons": [
+        {
+          "src": "images/inventaris-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Barang Habis Pakai",
+      "short_name": "Stok",
+      "url": "stok",
+      "icons": [
+        {
+          "src": "images/inventaris-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

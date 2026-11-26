@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Lokasi & Ruangan')
-@section('subtitle', 'Ruangan dan area tempat aset & stok disimpan, dipakai bersama semua unit dan HaloDek. Mengubah atau menghapus hanya Superadmin.')
+@section('subtitle', 'Ruangan dan area tempat aset & stok berada. Dipakai bersama semua regu dan HaloDek; hanya Superadmin yang bisa mengubah atau menghapus.')
 
 @section('content')
 <div class="card">

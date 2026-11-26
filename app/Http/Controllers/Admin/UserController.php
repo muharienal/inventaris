@@ -52,7 +52,10 @@ class UserController extends Controller
 
         return view('users.index', compact('users', 'search', 'role', 'state', 'unitId', 'roleCounts', 'units') + [
             'syncEnabled' => $sync->enabled(), 'lastSync' => $sync->last(),
-            // Orang yang bisa diberi akses (data dari HaloDek, belum punya akses).
+            // Orang yang bisa diberi akses (data dari HaloDek, belum punya akses): dropdown per bidang.
+            'candidates' => $sync->enabled()
+                ? User::where('role', User::ROLE_KARYAWAN)->where('is_active', true)->orderBy('department')->orderBy('name')->get(['nik', 'name', 'department'])
+                : collect(),
         ]);
     }
 
@@ -99,6 +102,9 @@ class UserController extends Controller
         $temp = User::temporaryPassword();
         $attrs = $data + ['password' => $temp, 'must_change_password' => true, 'is_active' => true]; // di-hash lewat cast
         $user = $person ? tap($person)->update($attrs) : User::create($attrs);
+        if (! $sync->enabled()) {
+            \App\Models\OrgUnit::syncFromUsers(); // tanpa HaloDek: bidang/divisi baru jadi pilihan pemegang aset
+        }
 
         Audit::log('user.create', "Memberi akses {$user->roleLabel()} kepada {$user->name} ({$user->nik}).", $user);
 
@@ -126,6 +132,9 @@ class UserController extends Controller
         }
 
         $user->update($data);
+        if (! app(EmployeeSync::class)->enabled()) {
+            \App\Models\OrgUnit::syncFromUsers();
+        }
 
         Audit::log('user.update', "Mengubah pengguna {$user->name} ({$user->nik}).", $user);
 
@@ -192,7 +201,7 @@ class UserController extends Controller
     public function template(): StreamedResponse
     {
         // Beri akses massal: orangnya harus sudah ada di HaloDek (data diri tidak diisi di sini).
-        return Csv::download('template-beri-akses.csv', ['nik', 'role', 'unit'], [
+        return Csv::download('template-beri-akses.csv', ['nik', 'role', 'regu'], [
             ['00010', 'manajer', ''],
             ['00011', 'kepala_regu', 'sarpras'],
             ['00012', 'staf', 'it'],
@@ -207,7 +216,7 @@ class UserController extends Controller
             }
         })();
 
-        return Csv::download('pengguna-inventaris-'.now()->format('Ymd').'.csv', ['nik', 'name', 'role', 'phone', 'division', 'department', 'position', 'unit', 'status'], $rows);
+        return Csv::download('pengguna-inventaris-'.now()->format('Ymd').'.csv', ['nik', 'nama', 'peran', 'no_wa', 'divisi', 'bidang', 'jabatan', 'regu', 'status'], $rows);
     }
 
     public function import(Request $request)
@@ -229,8 +238,8 @@ class UserController extends Controller
             }
             $unit = null;
             if (in_array($role, User::UNIT_ROLES, true)) {
-                $code = mb_strtolower(trim((string) ($d['unit'] ?? '')));
-                $unit = $units[$code] ?? throw ValidationException::withMessages(['unit' => 'Kepala Regu dan Staf wajib memiliki unit (kode: '.$units->keys()->implode(', ').').']);
+                $code = mb_strtolower(trim((string) ($d['regu'] ?? $d['unit'] ?? ''))); // kolom lama "unit" tetap diterima
+                $unit = $units[$code] ?? throw ValidationException::withMessages(['regu' => 'Kepala Regu dan Staf wajib memiliki regu (kode: '.$units->keys()->implode(', ').').']);
             }
 
             // Password acak tak diketahui; akun mendapat password sementara lewat "Atur ulang password".
@@ -258,7 +267,7 @@ class UserController extends Controller
 
         if (in_array($data['role'], User::UNIT_ROLES, true)) {
             if (empty($data['unit_id'])) {
-                throw ValidationException::withMessages(['unit_id' => 'Kepala Regu dan Staf wajib memilih unit.']);
+                throw ValidationException::withMessages(['unit_id' => 'Kepala Regu dan Staf wajib memilih regu.']);
             }
         } else {
             $data['unit_id'] = null;
@@ -288,7 +297,7 @@ class UserController extends Controller
         // Kepala Regu & Staf wajib punya unit; Superadmin & Manajer melihat semua unit.
         if (in_array($data['role'], User::UNIT_ROLES, true)) {
             if (empty($data['unit_id'])) {
-                throw ValidationException::withMessages(['unit_id' => 'Kepala Regu dan Staf wajib memilih unit.']);
+                throw ValidationException::withMessages(['unit_id' => 'Kepala Regu dan Staf wajib memilih regu.']);
             }
         } else {
             $data['unit_id'] = null;

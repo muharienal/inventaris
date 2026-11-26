@@ -22,7 +22,7 @@
         <dl class="meta-list">
             <div><dt>Status</dt><dd><x-badge :tone="$asset->statusTone()">{{ $asset->statusLabel() }}</x-badge></dd></div>
             <div><dt>Kondisi</dt><dd><x-badge :tone="$asset->conditionTone()" plain>{{ $asset->conditionLabel() }}</x-badge></dd></div>
-            <div><dt>Unit</dt><dd><x-unit-chip :unit="$asset->unit" /></dd></div>
+            <div><dt>Regu</dt><dd><x-unit-chip :unit="$asset->unit" /></dd></div>
             @if ($openReports)<div><dt>Laporan kendala</dt><dd><span class="note-flag is-orange"><x-icon name="alert" :size="14" /> {{ $openReports }} masih aktif</span></dd></div>@endif
         </dl>
         <div class="detail-actions" role="group" aria-label="Tindakan">
@@ -62,7 +62,7 @@
                 @endif
 
                 <dl class="kv-grid">
-                    <div><dt>Merek / model</dt><dd>{{ trim($asset->brand.' '.$asset->model) ?: '-' }}</dd></div>
+                    <div><dt>Merek / model</dt><dd>{{ $asset->brandModel() ?? '-' }}</dd></div>
                     <div><dt>Nomor seri</dt><dd>{{ $asset->serial_number ?: '-' }}</dd></div>
                     <div><dt>Didaftarkan</dt><dd>{{ $asset->created_at->translatedFormat('d M Y') }}</dd></div>
                 </dl>
@@ -79,21 +79,33 @@
                     <p class="muted text-sm" style="margin:0">Belum ada riwayat.</p>
                 @else
                     <ul class="timeline">
+                        @php $firstMoveId = $timeline->where('kind', 'move')->min(fn ($e) => $e['item']->id); @endphp
                         @foreach ($timeline as $e)
                             @php $i = $e['item']; @endphp
                             @if ($e['kind'] === 'move')
+                                @php
+                                    $first = $i->id === $firstMoveId; // catatan saat aset didaftarkan
+                                    $locText = $i->toLocation && $i->from_location_id !== $i->to_location_id
+                                        ? 'Lokasi '.($i->fromLocation && ! $first ? $i->fromLocation->name.' → ' : '').$i->toLocation->name : null;
+                                    $who = match (true) {
+                                        $first => $i->to_holder_name ? 'Pemegang '.$i->to_holder_name : null,
+                                        in_array($i->type, ['serah_terima', 'pinjam'], true) => ($i->from_holder_name ? $i->from_holder_name.' → ' : '').($i->to_holder_name ?? '-'),
+                                        $i->type === 'kembali' => 'Dikembalikan'.($i->from_holder_name ? ' oleh '.$i->from_holder_name : '').($i->to_holder_name ? ', kembali ke '.$i->to_holder_name : ', masuk gudang'),
+                                        $i->type === 'tarik' => 'Ditarik dari '.($i->from_holder_name ?? '-'),
+                                        default => null,
+                                    };
+                                @endphp
                                 <li class="tl-item t-{{ $i->type === 'pinjam' ? 'claimed' : ($i->type === 'kembali' ? 'confirmed' : 'status') }}">
-                                    <span class="tl-dot"><x-icon :name="['serah_terima' => 'handshake', 'pindah' => 'pin', 'pinjam' => 'clock', 'kembali' => 'check-circle', 'tarik' => 'box'][$i->type] ?? 'swap'" :size="15" /></span>
-                                    <div class="flex items-center gap-2 wrap text-sm"><strong>{{ $i->typeLabel() }}</strong>
+                                    <span class="tl-dot"><x-icon :name="$first ? 'plus' : (['serah_terima' => 'handshake', 'pindah' => 'pin', 'pinjam' => 'clock', 'kembali' => 'check-circle', 'tarik' => 'box'][$i->type] ?? 'swap')" :size="15" /></span>
+                                    <div class="flex items-center gap-2 wrap text-sm"><strong>{{ $first ? 'Didaftarkan' : $i->typeLabel() }}</strong>
                                         <span class="faint text-xs" title="{{ $i->created_at->translatedFormat('d M Y H:i') }}">{{ $i->created_at->translatedFormat('d M Y') }} · {{ $i->user->name ?? 'Sistem' }}</span></div>
+                                    @if ($who || $locText || $i->type === 'pinjam')
                                     <div class="text-sm muted mt-1">
-                                        @if (in_array($i->type, ['serah_terima', 'pinjam'], true)){{ $i->from_holder_name ? $i->from_holder_name.' → ' : '' }}<strong>{{ $i->to_holder_name ?? '-' }}</strong>@endif
-                                        @if ($i->type === 'kembali')Dikembalikan{{ $i->from_holder_name ? ' oleh '.$i->from_holder_name : '' }}@endif
-                                        @if ($i->type === 'tarik')Ditarik dari {{ $i->from_holder_name ?? '-' }}@endif
-                                        @if ($i->from_location_id !== $i->to_location_id && $i->toLocation) · lokasi {{ $i->fromLocation?->name ? $i->fromLocation->name.' → ' : '' }}{{ $i->toLocation->name }}@elseif ($i->type === 'pindah' && $i->toLocation) · {{ $i->toLocation->name }}@endif
+                                        {{ collect([$who, $locText])->filter()->implode(' · ') }}
                                         @if ($i->type === 'pinjam') · kembali {{ $i->due_back_at?->translatedFormat('d M Y') }}@if ($i->returned_at) <span class="ok-text">(sudah kembali {{ $i->returned_at->translatedFormat('d M') }})</span>@elseif ($i->isOverdue()) <span class="danger-text strong">(lewat tenggat)</span>@endif @endif
                                     </div>
-                                    @if ($i->note)<div class="bubble pre-line text-sm">{{ $i->note }}</div>@endif
+                                    @endif
+                                    @if ($i->note && ! ($first && in_array($i->note, ['Pencatatan awal aset.', 'Impor CSV.'], true)))<div class="bubble pre-line text-sm">{{ $i->note }}</div>@endif
                                 </li>
                             @elseif ($e['kind'] === 'service')
                                 <li class="tl-item t-{{ $i->status === 'selesai' ? 'confirmed' : 'reopened' }}">
@@ -126,9 +138,9 @@
             <div class="card-head"><h2>Pemegang &amp; Lokasi</h2></div>
             <div class="card-body" style="display:grid;gap:12px">
                 <div class="flex justify-between gap-3 text-sm"><span class="muted">Pemegang</span>
-                    <span class="text-right">{{ $asset->holder ? $asset->holder->name.' ('.$asset->holder->nik.')' : 'Tidak ada' }}</span></div>
-                @if ($asset->holder && ! $asset->holder->is_active)
-                    <div class="alert alert-error" style="margin:0"><x-icon name="alert" :size="18" /><div>{{ $asset->holder->name }} sudah nonaktif. Tarik aset ini ke gudang atau serahkan ke orang lain.</div></div>
+                    <span class="text-right">{{ $asset->holderLabel() ?? 'Tidak ada' }}</span></div>
+                @if ($asset->holderInactive())
+                    <div class="alert alert-error" style="margin:0"><x-icon name="alert" :size="18" /><div>{{ $asset->holderName() }} sudah nonaktif. Alihkan aset ini atau tarik ke gudang.</div></div>
                 @endif
                 <div class="flex justify-between gap-3 text-sm"><span class="muted">Lokasi</span>
                     <span class="text-right">{{ $asset->location?->fullName() ?? '-' }}</span></div>
@@ -142,10 +154,10 @@
                             @if ($loan)
                                 <button class="btn btn-primary" data-modal-open="move-modal" data-fill='{"type":"kembali"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Terima Kembali"><x-icon name="check-circle" :size="16" /> Terima Kembali</button>
                             @else
-                                <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"serah_terima"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Serah Terima"><x-icon name="handshake" :size="16" /> Serah Terima</button>
-                                <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"pinjam"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Pinjamkan"><x-icon name="clock" :size="16" /> Pinjamkan</button>
+                                <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"serah_terima"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Alihkan Aset"><x-icon name="handshake" :size="16" /> Alihkan</button>
+                                <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"pinjam"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Pinjamkan Aset"><x-icon name="clock" :size="16" /> Pinjamkan</button>
                                 <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"pindah"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Pindah Lokasi"><x-icon name="pin" :size="16" /> Pindah Lokasi</button>
-                                @if ($asset->holder_id)
+                                @if ($asset->hasHolder())
                                     <button class="btn btn-secondary" data-modal-open="move-modal" data-fill='{"type":"tarik"}' data-action="{{ route('assets.move', $asset) }}" data-method="POST" data-title="Tarik ke Gudang"><x-icon name="box" :size="16" /> Tarik ke Gudang</button>
                                 @endif
                             @endif
@@ -225,7 +237,7 @@
         <x-form-modal id="move-modal" create-title="Mutasi Aset" :action="route('assets.move', $asset)" submit="Simpan Mutasi">
             <div style="display:grid;gap:14px">
                 <input type="hidden" name="type" id="move-type" value="{{ old('type', 'serah_terima') }}">
-                <div data-move="serah_terima pinjam"><x-input name="holder_nik" id="move-holder" label="Penerima / peminjam (NIK)" list="people-list" maxlength="80" placeholder="Ketik NIK atau nama" /></div>
+                <div data-move="serah_terima pinjam">@include('assets._holder-picker', ['p' => 'move', 'label' => 'Dialihkan / dipinjamkan ke'])</div>
                 <div data-move="serah_terima pinjam pindah kembali tarik">
                     <x-select name="location_id" id="move-location" label="Lokasi">
                         <option value="" data-keep>- Tetap di lokasi sekarang -</option>
@@ -238,7 +250,7 @@
             </div>
         </x-form-modal>
 
-        <x-form-modal id="service-modal" create-title="Servis &amp; Perawatan" :action="route('assets.services.store', $asset)" submit="Simpan">
+        <x-form-modal id="service-modal" create-title="Servis & Perawatan" :action="route('assets.services.store', $asset)" submit="Simpan">
             <div style="display:grid;gap:14px">
                 <div class="form-grid">
                     <x-select name="type" label="Jenis" required>
@@ -285,10 +297,12 @@
         document.querySelectorAll('[data-move]').forEach(function (el) {
             var show = el.getAttribute('data-move').split(' ').indexOf(type.value) !== -1;
             el.hidden = !show;
-            el.querySelectorAll('input,select').forEach(function (i) { i.disabled = !show; });
+            el.querySelectorAll('input,select').forEach(function (i) { if (!i.closest('[data-holder-picker]')) { i.disabled = !show; } });
         });
-        var holder = document.getElementById('move-holder'), due = document.getElementById('move-due'), loc = document.getElementById('move-location');
-        if (holder) { holder.required = type.value === 'serah_terima' || type.value === 'pinjam'; }
+        document.dispatchEvent(new CustomEvent('hu:holder-sync'));
+        var due = document.getElementById('move-due'), loc = document.getElementById('move-location');
+        var lead = document.querySelector('label[for=move-holder-type]');
+        if (lead) { lead.firstChild.textContent = type.value === 'pinjam' ? 'Dipinjamkan ke ' : 'Dialihkan ke '; }
         if (due) { due.required = type.value === 'pinjam'; }
         if (loc) {
             // Pindah lokasi: wajib pilih lokasi tujuan (pilihan "tetap" disembunyikan).

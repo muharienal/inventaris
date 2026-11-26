@@ -11,7 +11,7 @@ class Asset extends Model
 {
     protected $fillable = [
         'unit_id', 'category_id', 'code', 'name', 'brand', 'model', 'serial_number', 'specs',
-        'status', 'condition', 'holder_id', 'location_id', 'purchase_date', 'vendor',
+        'status', 'condition', 'holder_id', 'holder_org_id', 'location_id', 'purchase_date', 'vendor',
         'due_date', 'next_service_at', 'service_interval_months', 'notes',
     ];
 
@@ -51,6 +51,12 @@ class Asset extends Model
         return $this->belongsTo(User::class, 'holder_id');
     }
 
+    /** Pemegang berupa bidang/divisi (holder_id kosong). */
+    public function holderOrg(): BelongsTo
+    {
+        return $this->belongsTo(OrgUnit::class, 'holder_org_id');
+    }
+
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class);
@@ -87,6 +93,51 @@ class Asset extends Model
     public function label(): string
     {
         return $this->code.' - '.$this->name;
+    }
+
+    /** Sedang dipegang seseorang, sebuah bidang, atau divisi. */
+    public function hasHolder(): bool
+    {
+        return (bool) ($this->holder_id || $this->holder_org_id);
+    }
+
+    /** "Arienal Haq" / "Bidang Umum & IT" / null. */
+    public function holderName(): ?string
+    {
+        if ($this->holder_id) {
+            return $this->holder?->name;
+        }
+
+        return $this->holder_org_id ? $this->holderOrg?->label() : null;
+    }
+
+    /** Untuk tampilan detail: nama + NIK bila orang. */
+    public function holderLabel(): ?string
+    {
+        if ($this->holder_id && $this->holder) {
+            return $this->holder->name.' ('.$this->holder->nik.')';
+        }
+
+        return $this->holderName();
+    }
+
+    /** Pemegang sudah nonaktif (keluar dari HaloDek / bidang dihapus): aset perlu dialihkan. */
+    public function holderInactive(): bool
+    {
+        return ($this->holder_id && $this->holder && ! $this->holder->is_active)
+            || (! $this->holder_id && $this->holder_org_id && $this->holderOrg && ! $this->holderOrg->is_active);
+    }
+
+    /** "Lenovo AIO PC", tanpa mengulang merek bila model sudah memuatnya. */
+    public function brandModel(): ?string
+    {
+        $brand = trim((string) $this->brand);
+        $model = trim((string) $this->model);
+        if ($brand !== '' && $model !== '' && str_starts_with(mb_strtolower($model), mb_strtolower($brand))) {
+            return $model;
+        }
+
+        return trim($brand.' '.$model) ?: null;
     }
 
     public function statusLabel(): string
@@ -172,6 +223,13 @@ class Asset extends Model
     public function scopeServiceDue(Builder $q, ?int $days = null): Builder
     {
         return $q->active()->whereNotNull('next_service_at')->whereDate('next_service_at', '<=', now()->addDays($days ?? config('inventaris.due_soon_days')));
+    }
+
+    /** Pemegangnya sudah nonaktif (orang, bidang, atau divisi). */
+    public function scopeInactiveHolder(Builder $q): Builder
+    {
+        return $q->where(fn ($w) => $w->whereHas('holder', fn ($h) => $h->where('is_active', false))
+            ->orWhere(fn ($x) => $x->whereNull('holder_id')->whereHas('holderOrg', fn ($o) => $o->where('is_active', false))));
     }
 
     public function scopeManagedBy(Builder $q, User $user): Builder

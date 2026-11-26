@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Barang Habis Pakai')
-@section('subtitle', 'Stok ATK, tinta, suku cadang, dan perlengkapan unit '.$unit->name)
+@section('subtitle', 'Stok ATK, tinta, suku cadang, dan perlengkapan yang dikelola tiap regu di Bidang Umum & IT.')
 
 @section('content')
 @if ($units->count() > 1)

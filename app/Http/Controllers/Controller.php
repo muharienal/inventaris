@@ -15,7 +15,7 @@ abstract class Controller extends BaseController
     /** Pastikan pengguna mengelola unit tersebut (Superadmin selalu lolos). */
     protected function authorizeUnit(?int $unitId): void
     {
-        abort_unless($unitId && auth()->user()->managesUnit($unitId), 403, 'Anda tidak mengelola unit ini.');
+        abort_unless($unitId && auth()->user()->managesUnit($unitId), 403, 'Anda tidak mengelola regu ini.');
     }
 
     /** Unit yang boleh dikelola pengguna yang sedang login. */
@@ -29,7 +29,7 @@ abstract class Controller extends BaseController
     {
         $units = $this->managedUnits();
         $unit = ($unitId ? $units->firstWhere('id', $unitId) : null) ?? $units->first();
-        abort_unless($unit, 403, 'Akun Anda belum terhubung ke unit mana pun. Hubungi Superadmin.');
+        abort_unless($unit, 403, 'Akun Anda belum terhubung ke regu mana pun. Hubungi Superadmin.');
 
         return $unit;
     }
